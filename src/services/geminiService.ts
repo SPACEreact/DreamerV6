@@ -9,6 +9,50 @@ import { geminiLogger } from '../lib/logger';
 import { handleAIServiceError, sanitizeErrorMessage } from '../lib/errorHandler';
 import { API_CONFIG, NUMERIC } from '../constants';
 
+// Helper function to extract clean suggestions
+const extractCleanSuggestions = (text: string): string[] => {
+    const lines = text.split('\n').map(line => line.trim()).filter(Boolean);
+    const suggestions: string[] = [];
+    
+    for (const line of lines) {
+        // Remove common prefixes
+        let cleanLine = line.replace(/^- /,'').replace(/^\* /,'').replace(/^\\d+\\. /,'').replace(/^[•-] /,'');
+        
+        // Skip empty or very short lines
+        if (cleanLine.length < 15) continue;
+        
+        // Skip explanatory/instructional lines
+        const skipPatterns = [
+            /^(here|these|below|following|this|here's|here are)/i,
+            /^(suggestion|tip|option|idea|recommendation)/i,
+            /^(answer|solve|address|respond to)/i,
+            /^(use|apply|try|consider)/i,
+            /^based on|^context:|^current question:|^scenario:/i,
+            /^(remember|note that|keep in mind)/i,
+            /^think about|^imagine if|^consider this/i
+        ];
+        
+        if (skipPatterns.some(pattern => pattern.test(cleanLine))) continue;
+        
+        // Skip lines that are mostly description or explanation (contain colons with short labels)
+        if (cleanLine.includes(':') && cleanLine.split(':')[0].length < 25) {
+            // But allow technical terms followed by explanation
+            const label = cleanLine.split(':')[0].trim();
+            if (!/^(technique|method|approach|style|genre|type|category)/i.test(label)) {
+                continue;
+            }
+        }
+        
+        // Skip lines that end with periods and are very long (likely explanations)
+        if (cleanLine.length > 100 && cleanLine.endsWith('.')) continue;
+        
+        // Accept the suggestion
+        suggestions.push(cleanLine);
+    }
+    
+    return suggestions.filter(Boolean).slice(0, 5);
+};
+
 // Initialize GoogleGenAI with the Vite-provided Gemini API key.
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY || 'AIzaSyBPs9SZIbFgYzGa0Q8IzOZ2_votD3GzT_s';
 
@@ -167,48 +211,34 @@ export const getAISuggestions = async (context: string, currentQuestion: string,
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: `You are Dreamer, a visionary cinematography AI. Your voice is poetic, insightful, and steeped in film theory.
-            Your task is to provide 3-5 creative, professional suggestions for the current question.
-            Critically analyze all the context provided (the user's script, their previous answers, the cinematic knowledge base, and the local AI narrative analysis).
-            Synthesize these elements to generate suggestions that are not just creative, but are deeply relevant to the user's established world and themes.
-            Each suggestion must be a concise, actionable answer that directly addresses the question.
-            When possible, reference specific techniques from the knowledge base that would enhance this particular question/answer.
+            contents: `You are Dreamer, a visionary cinematography AI. 
 
-            CONTEXT:
-            ${enhancedContext}
+IMPORTANT: Respond with ONLY the suggestions, nothing else. No introductions, no explanations, no context.
 
-            CURRENT QUESTION:
-            "${currentQuestion}"`,
+Provide 3-5 creative, professional suggestions as short, actionable responses. Each should be a complete phrase or short sentence that directly answers the question.
+
+Format: Each suggestion on a new line, no numbering or bullets needed.
+
+CONTEXT:
+${enhancedContext}
+
+CURRENT QUESTION:
+"${currentQuestion}"
+
+Respond with only the suggestions:`,
             config: {
 
             }
         });
 
         const suggestionsText = response.text;
-        const lines = suggestionsText.split('\n');
-        const suggestions = [];
+        console.log('Raw AI Response:', suggestionsText);
         
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-            
-            // Remove common prefixes
-            let cleanLine = trimmed.replace(/^- /,'').replace(/^\* /,'').replace(/^\d+\. /,'').replace(/^[•-] /,'');
-            
-            // Skip lines that are clearly not suggestions
-            if (cleanLine.length < 10 || 
-                /^(here|these|below|following|this|here's|here are)/i.test(cleanLine) ||
-                /^(suggestion|tip|option|idea|recommendation)/i.test(cleanLine) ||
-                cleanLine.includes(':') && cleanLine.split(':')[0].length < 20) {
-                continue;
-            }
-            
-            if (cleanLine) {
-                suggestions.push(cleanLine);
-            }
-        }
+        // More robust suggestion extraction
+        const suggestions = extractCleanSuggestions(suggestionsText);
+        console.log('Extracted suggestions:', suggestions);
         
-        return suggestions.filter(Boolean);
+        return suggestions;
     } catch (error) {
         handleAIServiceError(error, 'Get AI Suggestions');
         return [];
@@ -280,36 +310,18 @@ export const getKnowledgeBasedSuggestions = async (
         
         const aiResponse = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: `Based on this narrative context and relevant cinematic knowledge, provide 2-3 specific suggestions for: "${currentQuestion}"
+            contents: `Based on this context and relevant cinematic knowledge, provide 2-3 specific, actionable suggestions for: "${currentQuestion}"
 
-                Context: ${enhancedContext}
-                
-                Focus on actionable, technical suggestions that directly apply the relevant knowledge. Be concise and specific.`,
+IMPORTANT: Respond with ONLY the suggestions, nothing else. No introductions, no explanations, no context.
+
+Context: ${enhancedContext}
+
+Each suggestion should be a short, complete phrase that directly applies the relevant knowledge.
+
+Respond with only the suggestions:`,
         });
 
-        const aiResponseText = aiResponse.text;
-        const lines = aiResponseText.split('\n');
-        const aiSuggestions = [];
-        
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) continue;
-            
-            // Remove common prefixes
-            let cleanLine = trimmed.replace(/^- /,'').replace(/^\* /,'').replace(/^\d+\. /,'').replace(/^[•-] /,'');
-            
-            // Skip lines that are clearly not suggestions
-            if (cleanLine.length < 10 || 
-                /^(here|these|below|following|this|here's|here are)/i.test(cleanLine) ||
-                /^(suggestion|tip|option|idea|recommendation)/i.test(cleanLine) ||
-                cleanLine.includes(':') && cleanLine.split(':')[0].length < 20) {
-                continue;
-            }
-            
-            if (cleanLine) {
-                aiSuggestions.push(cleanLine);
-            }
-        }
+        const aiSuggestions = extractCleanSuggestions(aiResponse.text);
         
         // Combine knowledge-based and AI suggestions
         const allSuggestions = [...knowledgeSuggestions, ...aiSuggestions].slice(0, 5);
