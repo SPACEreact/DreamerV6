@@ -154,14 +154,12 @@ export class LLamaProvider implements ICastingProvider {
       });
 
       const apiError = createAPIError(
-        error instanceof Error ? error.message : String(error),
-        {
-          service: 'LLaMA Casting Provider',
-          operation: 'generateCasting'
-        },
-        error
+        error instanceof Error ? error.message : String(error)
       );
-      logAPIError(apiError);
+      logAPIError(error, {
+        service: 'LLaMA Casting Provider',
+        operation: 'generateCasting'
+      });
 
       throw error;
     }

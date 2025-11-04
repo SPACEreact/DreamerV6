@@ -895,3 +895,6 @@
 # uploads/
 # downloads/
 
+
+# Local Netlify folder
+.netlify
