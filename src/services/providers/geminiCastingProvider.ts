@@ -161,14 +161,12 @@ export class GeminiCastingProvider implements ICastingProvider {
       });
 
       const apiError = createAPIError(
-        error instanceof Error ? error.message : String(error),
-        {
-          service: 'Gemini Casting Provider',
-          operation: 'generateCasting'
-        },
-        error
+        error instanceof Error ? error.message : String(error)
       );
-      logAPIError(apiError);
+      logAPIError(error, {
+        service: 'Gemini Casting Provider',
+        operation: 'generateCasting'
+      });
 
       throw error;
     }
