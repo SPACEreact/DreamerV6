@@ -185,7 +185,30 @@ export const getAISuggestions = async (context: string, currentQuestion: string,
         });
 
         const suggestionsText = response.text;
-        return suggestionsText.split('\n').map(s => s.trim().replace(/^- /,'').replace(/^\* /,'').replace(/^\d+\. /,'')).filter(Boolean);
+        const lines = suggestionsText.split('\n');
+        const suggestions = [];
+        
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            
+            // Remove common prefixes
+            let cleanLine = trimmed.replace(/^- /,'').replace(/^\* /,'').replace(/^\d+\. /,'').replace(/^[•-] /,'');
+            
+            // Skip lines that are clearly not suggestions
+            if (cleanLine.length < 10 || 
+                /^(here|these|below|following|this|here's|here are)/i.test(cleanLine) ||
+                /^(suggestion|tip|option|idea|recommendation)/i.test(cleanLine) ||
+                cleanLine.includes(':') && cleanLine.split(':')[0].length < 20) {
+                continue;
+            }
+            
+            if (cleanLine) {
+                suggestions.push(cleanLine);
+            }
+        }
+        
+        return suggestions.filter(Boolean);
     } catch (error) {
         handleAIServiceError(error, 'Get AI Suggestions');
         return [];
@@ -264,7 +287,29 @@ export const getKnowledgeBasedSuggestions = async (
                 Focus on actionable, technical suggestions that directly apply the relevant knowledge. Be concise and specific.`,
         });
 
-        const aiSuggestions = aiResponse.text.split('\n').map(s => s.trim().replace(/^- /,'').replace(/^\* /,'')).filter(Boolean);
+        const aiResponseText = aiResponse.text;
+        const lines = aiResponseText.split('\n');
+        const aiSuggestions = [];
+        
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            
+            // Remove common prefixes
+            let cleanLine = trimmed.replace(/^- /,'').replace(/^\* /,'').replace(/^\d+\. /,'').replace(/^[•-] /,'');
+            
+            // Skip lines that are clearly not suggestions
+            if (cleanLine.length < 10 || 
+                /^(here|these|below|following|this|here's|here are)/i.test(cleanLine) ||
+                /^(suggestion|tip|option|idea|recommendation)/i.test(cleanLine) ||
+                cleanLine.includes(':') && cleanLine.split(':')[0].length < 20) {
+                continue;
+            }
+            
+            if (cleanLine) {
+                aiSuggestions.push(cleanLine);
+            }
+        }
         
         // Combine knowledge-based and AI suggestions
         const allSuggestions = [...knowledgeSuggestions, ...aiSuggestions].slice(0, 5);
