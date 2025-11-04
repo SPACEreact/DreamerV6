@@ -9,7 +9,7 @@ import { geminiLogger } from '../lib/logger';
 import { handleAIServiceError, sanitizeErrorMessage } from '../lib/errorHandler';
 import { API_CONFIG, NUMERIC } from '../constants';
 
-// Helper function to extract clean suggestions - ultra aggressive filtering
+// Helper function to extract clean suggestions - targeted filtering
 const extractCleanSuggestions = (text: string): string[] => {
     const lines = text.split('\n')
         .map(line => line.trim())
@@ -18,130 +18,52 @@ const extractCleanSuggestions = (text: string): string[] => {
     const suggestions: string[] = [];
     
     for (const line of lines) {
-        // Very aggressive filtering - skip almost everything initially
-        const cleanLine = line
+        // Remove common prefixes
+        let cleanLine = line
             .replace(/^- /,'')
             .replace(/^\* /,'')
             .replace(/^\d+\. /,'')
             .replace(/^[•-] /,'')
-            .replace(/^\(\d+\)/,'')
-            .replace(/^\[\d+\]/,'')
             .trim();
         
-        // Skip if too short or too long (likely explanation)
-        if (cleanLine.length < 20 || cleanLine.length > 120) continue;
+        // Skip empty lines
+        if (!cleanLine) continue;
         
-        // Extensive list of patterns to skip
-        const skipPatterns = [
-            // Introduction/instruction patterns
+        // Skip very short lines (likely not meaningful suggestions)
+        if (cleanLine.length < 8) continue;
+        
+        // Specifically target the problematic patterns we identified
+        const problematicPatterns = [
             /^(here|these|below|following|this|here's|here are|here is)/i,
             /^(suggestion|tip|option|idea|recommendation|approach)/i,
-            /^(answer|solve|address|respond to|consider|think about)/i,
-            /^(use|apply|try|implement|utilize|employ)/i,
-            /^(remember|note that|keep in mind|bear in mind)/i,
-            
-            // Context/analysis patterns  
             /^based on|^context:|^current question:|^scenario:/i,
-            /^narrative|^genre|^style|^technique|^method|^approach/i,
-            /^visual|^audio|^lighting|^camera|^composition/i,
-            
-            // Explanatory patterns
-            /^this means|^this suggests|^you should|^you could|^consider using/i,
-            /^for example|^for instance|^such as|^like|^similar to/i,
-            /^in this case|^in your case|^for your|^according to/i,
-            
-            // Question patterns
-            /^(what|how|why|when|where|who|which|should|could|would)/i,
-            /^do you|^are you|^have you|^will you|^can you/i,
-            
-            // Verbose explanation patterns
+            /^(remember|note that|keep in mind|bear in mind)/i,
             /^(you might want to|you should try|you could consider)/i,
-            /^(a good approach|one option|another way|possible solution)/i,
-            
-            // Content indicators
             /^(explanation|description|analysis|suggestions are|ideas are)/i,
-            /^(recommendation is|approach would be|method involves)/i
+            /^what|how|why|when|where|who|which|should/i,
+            /^do you|^are you|^have you|^will you|^can you/i
         ];
         
-        // Skip if matches any skip pattern
-        if (skipPatterns.some(pattern => pattern.test(cleanLine))) continue;
-        
-        // Skip lines with excessive punctuation or formatting
-        if (cleanLine.includes('...') || cleanLine.split('.').length > 2) continue;
-        if (cleanLine.includes(';') || cleanLine.includes(',')) continue;
-        if (cleanLine.includes('!') || cleanLine.includes('?')) continue;
-        
-        // Skip lines that are questions or conditional
-        if (cleanLine.includes('?') || cleanLine.includes('if ') || cleanLine.includes('should ')) continue;
-        if (cleanLine.includes('would ') || cleanLine.includes('could ') || cleanLine.includes('might ')) continue;
-        
-        // Skip lines with colon unless it's a technical term
-        if (cleanLine.includes(':')) {
-            const beforeColon = cleanLine.split(':')[0].trim();
-            const techTerms = ['technique', 'method', 'approach', 'style', 'genre', 'type', 'category'];
-            if (!techTerms.some(term => beforeColon.toLowerCase().includes(term))) {
-                continue;
-            }
+        // Skip only if it matches specific problematic patterns
+        if (problematicPatterns.some(pattern => pattern.test(cleanLine))) {
+            continue;
         }
         
-        // Skip lines that start with articles unnecessarily
-        if (/^(the|a|an|this|that|these|those)\s+/i.test(cleanLine)) {
-            // But allow some specific cases
-            if (!/^(the director|the camera|the lighting|the composition)/i.test(cleanLine)) {
-                continue;
-            }
+        // Skip lines that are clearly explanations (very long with periods)
+        if (cleanLine.length > 150 && cleanLine.endsWith('.')) {
+            continue;
         }
         
-        // Accept only very specific types of content
-        const goodStartPatterns = [
-            /^use\s+/i,
-            /^apply\s+/i,
-            /^try\s+/i,
-            /^implement\s+/i,
-            /^focus on\s+/i,
-            /^emphasize\s+/i,
-            /^highlight\s+/i,
-            /^enhance\s+/i,
-            /^utilize\s+/i,
-            /^employ\s+/i
-        ];
+        // Skip questions
+        if (cleanLine.includes('?')) {
+            continue;
+        }
         
-        const isActionable = goodStartPatterns.some(pattern => pattern.test(cleanLine));
-        
-        // Or accept specific cinematography terms
-        const cinematographyTerms = [
-            'close-up', 'wide shot', 'medium shot', 'low angle', 'high angle', 'dutch angle',
-            'depth of field', 'bokeh', 'cinematic', 'dramatic lighting', 'soft lighting',
-            'hard lighting', 'backlighting', 'rim lighting', 'motivated lighting',
-            'rule of thirds', 'golden ratio', 'leading lines', 'symmetry', 'asymmetry'
-        ];
-        
-        const hasCinematographyTerms = cinematographyTerms.some(term => 
-            cleanLine.toLowerCase().includes(term)
-        );
-        
-        // Only accept if it's actionable OR has cinematography terms
-        if (!isActionable && !hasCinematographyTerms) continue;
-        
-        // Final validation - must be concise and direct
-        if (cleanLine.split(' ').length < 4 || cleanLine.split(' ').length > 15) continue;
-        
+        // Accept the line as a potential suggestion
         suggestions.push(cleanLine);
     }
     
-    // If we have too few suggestions, try a more lenient approach
-    if (suggestions.length < 2) {
-        const fallback = text.split('\n')
-            .map(line => line.trim())
-            .filter(line => line.length > 15 && line.length < 100)
-            .filter(line => !/^(here|these|this|that|below|following)/i.test(line))
-            .filter(line => !line.includes('?') && !line.includes('!'))
-            .slice(0, 5);
-        
-        return fallback;
-    }
-    
-    return suggestions.slice(0, 5);
+    return suggestions.filter(Boolean).slice(0, 6);
 };
 
 // Initialize GoogleGenAI with the Vite-provided Gemini API key.
@@ -302,27 +224,22 @@ export const getAISuggestions = async (context: string, currentQuestion: string,
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: `IMPORTANT: Return ONLY actionable suggestions. NO introductions, explanations, or context.
+            contents: `You are a cinematography expert. Provide 3-5 creative suggestions for this question.
 
-Provide exactly 3-5 direct suggestions. Each must start with action words like "Use", "Apply", "Try", "Implement", "Focus on", "Emphasize".
-
-Keep each suggestion under 10 words. Make them specific cinematography techniques.
+Each suggestion should be a short, actionable response (1-2 sentences) that directly answers the question.
 
 Current question: "${currentQuestion}"
 
-Return only the suggestions, one per line:`,
+Context: ${enhancedContext}
+
+Provide your suggestions:`,
             config: {
 
             }
         });
 
         const suggestionsText = response.text;
-        console.log('Raw AI Response:', suggestionsText);
-        
-        // More robust suggestion extraction
         const suggestions = extractCleanSuggestions(suggestionsText);
-        console.log('Extracted suggestions:', suggestions);
-        
         return suggestions;
     } catch (error) {
         handleAIServiceError(error, 'Get AI Suggestions');
@@ -395,17 +312,13 @@ export const getKnowledgeBasedSuggestions = async (
         
         const aiResponse = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: `Return ONLY 2-3 direct suggestions for: "${currentQuestion}"
+            contents: `Based on this context, provide 2-3 specific suggestions for: "${currentQuestion}"
 
-Each suggestion must:
-- Start with action words (Use, Apply, Try, Focus on)
-- Be under 10 words
-- Reference cinematography techniques
-- Be actionable advice
+Focus on actionable, technical suggestions that directly apply the relevant knowledge.
 
 Context: ${enhancedContext}
 
-Return only the suggestions, one per line:`,
+Provide your suggestions:`,
         });
 
         const aiSuggestions = extractCleanSuggestions(aiResponse.text);
