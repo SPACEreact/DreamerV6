@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Volume2, Loader2, Download, Play, Pause } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Volume2, Loader2, Download, Play, Pause, X, Sparkles } from 'lucide-react';
+import { DualProviderAudioGeneration } from './DualProviderAudioGeneration';
+import { DualProviderAudioResponse } from '../types/audioGeneration';
 
 interface OldSoundTabProps {
   onGenerate?: (audioData: any) => void;
@@ -20,6 +22,8 @@ export const OldSoundTab: React.FC<OldSoundTabProps> = ({
   const [generatedAudio, setGeneratedAudio] = useState<any>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [showAdvancedAudioLab, setShowAdvancedAudioLab] = useState(false);
+  const [advancedAudioResult, setAdvancedAudioResult] = useState<DualProviderAudioResponse | null>(null);
 
   const soundTypeOptions = [
     { id: 'ambient', label: 'Ambient', description: 'Background atmosphere and environment' },
@@ -95,25 +99,135 @@ export const OldSoundTab: React.FC<OldSoundTabProps> = ({
   };
 
   const handlePlayPause = () => {
-    if (!audioElement) return;
+    const ensureAudioElement = () => {
+      if (audioElement) return audioElement;
+      const primaryUrl = advancedAudioResult?.primary?.audios?.[0]?.url;
+      if (!primaryUrl) return null;
+      const newAudio = new Audio(primaryUrl);
+      newAudio.onended = () => setIsPlaying(false);
+      setAudioElement(newAudio);
+      return newAudio;
+    };
+
+    const element = ensureAudioElement();
+    if (!element) return;
 
     if (isPlaying) {
-      audioElement.pause();
+      element.pause();
       setIsPlaying(false);
     } else {
-      audioElement.play();
+      element.play();
       setIsPlaying(true);
     }
   };
 
   const handleDownload = () => {
-    if (!generatedAudio) return;
-    // Implement download logic
-    console.log('Download audio:', generatedAudio);
+    const url = advancedAudioResult?.primary?.audios?.[0]?.url;
+    if (!url) {
+      if (generatedAudio) {
+        console.log('Download audio:', generatedAudio);
+      }
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `dreamer-audio-${advancedAudioResult.selectedProvider || 'primary'}.wav`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  useEffect(() => {
+    if (advancedAudioResult?.primary?.audios?.[0]?.url) {
+      const url = advancedAudioResult.primary.audios[0].url;
+      const audio = new Audio(url);
+      audio.onended = () => setIsPlaying(false);
+      if (audioElement) {
+        audioElement.pause();
+      }
+      setAudioElement(audio);
+      setIsPlaying(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [advancedAudioResult]);
+
+  useEffect(() => {
+    return () => {
+      if (audioElement) {
+        audioElement.pause();
+      }
+    };
+  }, [audioElement]);
+
+  const handleAdvancedAudioGenerated = (response: DualProviderAudioResponse) => {
+    setAdvancedAudioResult(response);
+    setShowAdvancedAudioLab(false);
+    const audioData = {
+      description,
+      types: soundTypes.length ? soundTypes : ['ambient'],
+      mood,
+      intensity,
+      duration,
+      timestamp: new Date().toISOString(),
+      advancedAudio: response
+    };
+    setGeneratedAudio(audioData);
+    if (onGenerate) {
+      onGenerate(audioData);
+    }
   };
 
   return (
     <div className="space-y-6">
+      <AnimatePresence>
+        {showAdvancedAudioLab && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-4xl bg-gray-900 border border-gray-800 rounded-xl p-6"
+            >
+              <button
+                onClick={() => setShowAdvancedAudioLab(false)}
+                className="absolute top-3 right-3 p-2 rounded-full bg-gray-800 hover:bg-gray-700 transition-colors"
+                aria-label="Close advanced audio lab"
+              >
+                <X className="w-4 h-4 text-gray-300" />
+              </button>
+              <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-300" />
+                Dual-Provider Audio Lab (Preview)
+              </h3>
+              <DualProviderAudioGeneration onAudioGenerated={handleAdvancedAudioGenerated} />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="bg-purple-900/20 border border-purple-700/40 rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <Sparkles className="w-5 h-5 text-purple-300 mt-1" />
+          <div>
+            <h4 className="text-sm font-semibold text-purple-200">Advanced audio mixing coming soon</h4>
+            <p className="text-xs text-purple-200/70">Preview our dual-provider audio engine that blends Gemini Audio with AudioLDM for cinematic results.</p>
+          </div>
+        </div>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => setShowAdvancedAudioLab(true)}
+          className="self-start md:self-auto px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-500 transition-colors"
+        >
+          Launch Preview
+        </motion.button>
+      </div>
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <Volume2 className="w-6 h-6 text-amber-500" />

@@ -767,12 +767,15 @@ export const generateBrollPrompt = async (context: string, style: SequenceStyle 
     }
 };
 
-export const generateSmartVisualDescription = async (visuals: {
-    composition: CompositionData,
-    lighting: LightingData,
-    color: ColorGradingData,
-    camera: CameraMovementData,
-}): Promise<string> => {
+export const generateSmartVisualDescription = async (
+    visuals: {
+        composition: CompositionData,
+        lighting: LightingData,
+        color: ColorGradingData,
+        camera: CameraMovementData,
+    },
+    knowledgeContext?: string
+): Promise<string> => {
     try {
         const compositionDetails = visuals.composition.characters.length > 0
             ? `Characters are positioned as follows: ${visuals.composition.characters.map(c => `${c.name} at coordinates (X: ${Math.round(c.x)}, Y: ${Math.round(c.y)})`).join(', ')}.`
@@ -786,7 +789,9 @@ export const generateSmartVisualDescription = async (visuals: {
             - Composition: ${compositionDetails} The camera is at ${visuals.composition.cameraHeight} with a ${visuals.composition.cameraAngle} angle.
             - Lighting: The mood is ${visuals.lighting.mood}. Key light is at ${visuals.lighting.keyLightIntensity}% intensity with a color of ${visuals.lighting.keyLightColor}. The scene has a color temperature of ${visuals.lighting.colorTemperature}K.
             - Color: The grade is named "${visuals.color.colorGrade}" with a ${visuals.color.colorHarmony} harmony. Saturation is at ${visuals.color.saturation} and contrast is ${visuals.color.contrast}.
-            - Camera Movement: The camera performs a ${visuals.camera.movementType} over ${visuals.camera.duration} seconds with ${visuals.camera.easing} easing, moving from (${visuals.camera.startPos.x}, ${visuals.camera.startPos.y}) to (${visuals.camera.endPos.x}, ${visuals.camera.endPos.y}). The focal length is ${visuals.camera.focalLength}mm.`,
+            - Camera Movement: The camera performs a ${visuals.camera.movementType} over ${visuals.camera.duration} seconds with ${visuals.camera.easing} easing, moving from (${visuals.camera.startPos.x}, ${visuals.camera.startPos.y}) to (${visuals.camera.endPos.x}, ${visuals.camera.endPos.y}). The focal length is ${visuals.camera.focalLength}mm.${knowledgeContext ? `
+            ADDITIONAL KNOWLEDGE:
+            ${knowledgeContext}` : ''}`,
         });
         return response.text.trim();
     } catch (error) {

@@ -200,6 +200,128 @@ const AI_MODELS: AIModel[] = [
   }
 ];
 
+type KnowledgeSummary = {
+  doc: KnowledgeDocument;
+  summary: string;
+  score: number;
+};
+
+const flattenPromptData = (data: PromptData): string => {
+  if (!data) return '';
+  const pieces: string[] = [];
+  Object.values(data).forEach(value => {
+    if (Array.isArray(value)) {
+      pieces.push(value.filter(Boolean).join(' '));
+    } else if (typeof value === 'string') {
+      pieces.push(value);
+    } else if (typeof value === 'number') {
+      pieces.push(String(value));
+    } else if (typeof value === 'boolean' && value) {
+      pieces.push('true');
+    }
+  });
+  return pieces.join(' ').toLowerCase();
+};
+
+const summarizeKnowledgeDoc = (doc: KnowledgeDocument): string => {
+  const knowledge = doc?.extractedKnowledge;
+  const parts: string[] = [];
+
+  if (knowledge?.themes?.length) {
+    parts.push(`Themes: ${knowledge.themes.slice(0, 3).join(', ')}`);
+  }
+  if (knowledge?.visualStyles?.length) {
+    parts.push(`Visual: ${knowledge.visualStyles.slice(0, 3).join(', ')}`);
+  }
+  if (knowledge?.techniques?.length) {
+    parts.push(`Techniques: ${knowledge.techniques.slice(0, 3).join(', ')}`);
+  }
+
+  return parts.join(' | ') || 'Cinematic reference insight';
+};
+
+const selectRelevantKnowledgeDocs = (
+  docs: KnowledgeDocument[] = [],
+  data: PromptData,
+  limit = 3
+): KnowledgeSummary[] => {
+  if (!Array.isArray(docs) || docs.length === 0) {
+    return [];
+  }
+
+  const reference = flattenPromptData(data);
+  const scored = docs.map(doc => {
+    const knowledge = doc.extractedKnowledge || { themes: [], visualStyles: [], techniques: [], characters: [] };
+    const keywords = [
+      ...(knowledge.themes || []),
+      ...(knowledge.visualStyles || []),
+      ...(knowledge.techniques || []),
+      ...(knowledge.characters || [])
+    ]
+      .map(keyword => keyword.toLowerCase())
+      .filter(Boolean);
+
+    let score = 0;
+    keywords.forEach(keyword => {
+      if (reference.includes(keyword)) {
+        score += 2;
+      }
+    });
+
+    // Lightly prefer user-provided documents to keep suggestions personal
+    if (doc && !doc.id.startsWith('preloaded-')) {
+      score += 1;
+    }
+
+    return {
+      doc,
+      summary: summarizeKnowledgeDoc(doc),
+      score
+    };
+  });
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const aTime = a.doc?.uploadedAt ? new Date(a.doc.uploadedAt).getTime() : 0;
+    const bTime = b.doc?.uploadedAt ? new Date(b.doc.uploadedAt).getTime() : 0;
+    return bTime - aTime;
+  });
+
+  const filtered = scored.filter(item => item.score > 0);
+  const selected = (filtered.length > 0 ? filtered : scored).slice(0, limit);
+
+  return selected;
+};
+
+const formatKnowledgeHighlight = (summary: KnowledgeSummary): string => {
+  const title = summary.doc?.name ?? 'Knowledge Insight';
+  return `${title} → ${summary.summary}`;
+};
+
+const detectBase64MimeType = (data: string | undefined, fallback: string): string => {
+  if (!data) return fallback;
+  if (data.startsWith('/9j/')) return 'image/jpeg';
+  if (data.startsWith('iVBOR')) return 'image/png';
+  if (data.startsWith('PHN2Zy')) return 'image/svg+xml';
+  if (data.startsWith('R0lGOD')) return 'image/gif';
+  return fallback;
+};
+
+const truncateNarrativeText = (text: string, maxLength: number): string => {
+  if (!text) return '';
+  if (text.length <= maxLength) return text.trim();
+  const truncated = text.slice(0, maxLength);
+  return `${truncated.replace(/\s+\S*$/, '').trim()}…`;
+};
+
+type GeneratedContentEntry = {
+  images: { photoreal?: string; stylized?: string };
+  imageMimeTypes?: { photoreal?: string; stylized?: string };
+  enhancedPrompt?: string;
+  videoPrompt?: string;
+  status: 'idle' | 'loading' | 'error';
+};
+
 // Error Boundary Component for better error handling
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error?: Error}> {
   constructor(props: {children: React.ReactNode}) {
@@ -950,16 +1072,19 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
             .filter(q => q.id !== currentQuestion.id && promptData[q.id as keyof PromptData])
             .map(q => `${q.question}: ${formatValue(promptData[q.id as keyof PromptData])}`)
             .join('\n');
-        
+
         const knowledgeContext = `KNOWLEDGE BASE:\n` + (knowledgeDocs || []).filter(doc => doc).map(doc => `[${doc?.name ?? 'Unknown'}]: Themes: ${doc?.extractedKnowledge?.themes?.join(', ') || 'N/A'}. Techniques: ${doc?.extractedKnowledge?.techniques?.join(', ') || 'N/A'}`).join('\n');
         const storyContext = promptData.scriptText ? `\n\nSTORY SCRIPT:\n${promptData.scriptText}` : '';
         const fullContext = `${knowledgeContext}\n\nPREVIOUS ANSWERS:\n${previousAnswers}${storyContext}`;
-        
+
+        const derivedKnowledgeSummaries = selectRelevantKnowledgeDocs(knowledgeDocs, promptData, 3);
+        const fallbackKnowledge = derivedKnowledgeSummaries.map(formatKnowledgeHighlight);
+
         // Get enhanced knowledge-based suggestions
         try {
             const { suggestions, relevantKnowledge } = await getKnowledgeBasedSuggestions(
-                fullContext, 
-                currentQuestion.question, 
+                fullContext,
+                currentQuestion.question,
                 knowledgeDocs
             );
             
@@ -982,8 +1107,19 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
             }
             
             setAiSuggestions(suggestions);
-            setKnowledgeInsights(relevantKnowledge);
-            
+
+            const formattedRelevant = (relevantKnowledge || []).map(text => {
+                const [title, rest] = text.split(':');
+                if (rest) {
+                    return `${title.trim()} → ${rest.trim()}`;
+                }
+                return text;
+            });
+
+            const combinedInsights = [...formattedRelevant, ...fallbackKnowledge].filter(Boolean);
+            const uniqueInsights = Array.from(new Set(combinedInsights));
+            setKnowledgeInsights(uniqueInsights);
+
             // Also get local narrative analysis if HuggingFace is ready
             if (huggingFaceReady) {
                 const analysis = await huggingFaceService.analyzeNarrative(fullContext);
@@ -993,8 +1129,9 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
             appLogger.error('Enhanced suggestions failed, falling back to basic AI suggestions:', error);
             const suggestions = await getAISuggestions(fullContext, currentQuestion.question, knowledgeDocs);
             setAiSuggestions(suggestions);
+            setKnowledgeInsights(fallbackKnowledge);
         }
-        
+
         setIsLoadingAI(false);
     };
     
@@ -2022,6 +2159,7 @@ interface SelectedItemPanelProps {
     onGenerateVideoPrompt: (item: ShotItem) => void;
     generatedContent: {
         images: { photoreal?: string; stylized?: string };
+        imageMimeTypes?: { photoreal?: string; stylized?: string };
         enhancedPrompt?: string;
         videoPrompt?: string;
         status: 'idle' | 'loading' | 'error';
@@ -2100,6 +2238,9 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
     const setCurrentStyle = (style: 'cinematic' | 'explainer') => {
         setStyles(prev => ({ ...prev, [item.id]: style }));
     };
+
+    const getImageMimeType = (view: 'photoreal' | 'stylized') =>
+        generatedContent.imageMimeTypes?.[view] ?? (view === 'photoreal' ? 'image/jpeg' : 'image/png');
 
     // Visual Editor Handlers
     const onCompositionChange = (field: keyof CompositionData, value: any) => updateVisuals(item.id, 'compositions', { ...visualData.composition, [field]: value });
@@ -2248,14 +2389,22 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                         )}
                         {generatedContent.status === 'idle' && generatedContent.images[imageView] && (
                             <>
-                                <img src={imageView === 'photoreal' ? `data:image/jpeg;base64,${generatedContent.images.photoreal}` : `data:image/png;base64,${generatedContent.images.stylized}`} className="max-w-full max-h-full object-contain rounded" alt="Generated scene"/>
+                                <img
+                                    src={`data:${getImageMimeType(imageView)};base64,${generatedContent.images[imageView]}`}
+                                    className="max-w-full max-h-full object-contain rounded"
+                                    alt="Generated scene"
+                                />
                                 <motion.button
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => {
                                         const base64Data = generatedContent.images[imageView]!;
-                                        const mimeType = imageView === 'photoreal' ? 'image/jpeg' : 'image/png';
-                                        const extension = imageView === 'photoreal' ? 'jpg' : 'png';
+                                        const mimeType = getImageMimeType(imageView);
+                                        const extension = mimeType === 'image/png'
+                                            ? 'png'
+                                            : mimeType === 'image/svg+xml'
+                                                ? 'svg'
+                                                : 'jpg';
                                         const filename = `dreamer-shot-${shotData.shotNumber}-${imageView}.${extension}`;
                                         downloadBase64Image(base64Data, mimeType, filename);
                                     }}
@@ -2466,12 +2615,7 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
     }, []);
     
     // State for generated content, keyed by timeline item ID
-    const [generatedContent, setGeneratedContent] = useState<Record<string, {
-        images: { photoreal?: string; stylized?: string };
-        enhancedPrompt?: string;
-        videoPrompt?: string;
-        status: 'idle' | 'loading' | 'error';
-    }>>({});
+    const [generatedContent, setGeneratedContent] = useState<Record<string, GeneratedContentEntry>>({});
 
     const activeItem = useMemo(() => timelineItems.find(item => item.id === activeTimelineItemId), [timelineItems, activeTimelineItemId]);
 
@@ -2613,14 +2757,27 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
 
     const handleEnhance = async (item: ShotItem) => {
         const id = item.id;
-        setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'loading'}}));
+        setGeneratedContent(prev => {
+            const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
+            return { ...prev, [id]: { ...existing, status: 'loading' } };
+        });
         try {
             const context = (timelineItems || []).filter(i => i).map(i => i.type === 'shot' ? `Shot ${(i as ShotItem)?.data?.shotNumber ?? '?'}: ${(i as ShotItem)?.data?.description ?? ''}` : '').join('\n');
-            const enhanced = await enhanceShotPrompt(item.data.prompt, context);
+            const knowledgeContext = buildKnowledgeContextForVisuals();
+            const enhanced = await enhanceShotPrompt(
+                item.data.prompt,
+                knowledgeContext ? `${context}\nKnowledge Notes:\n${knowledgeContext}` : context
+            );
             updateShotData(id, { prompt: enhanced });
-            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'idle', enhancedPrompt: enhanced}}));
+            setGeneratedContent(prev => {
+                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
+                return { ...prev, [id]: { ...existing, status: 'idle', enhancedPrompt: enhanced } };
+            });
         } catch (e) {
-            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'error'}}));
+            setGeneratedContent(prev => {
+                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
+                return { ...prev, [id]: { ...existing, status: 'error' } };
+            });
         }
     };
 
@@ -2631,7 +2788,10 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
     const handleGenerateImage = async (item: ShotItem, type: 'photoreal' | 'stylized') => {
         const id = item.id;
         const style = styles[id] || 'cinematic';
-        setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'loading'}}));
+        setGeneratedContent(prev => {
+            const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
+            return { ...prev, [id]: { ...existing, status: 'loading' } };
+        });
         try {
             const promptForGeneration = style === 'explainer' ? item.data.description : item.data.prompt;
             const imageGenerator = type === 'photoreal' ? generateImage : generateNanoImage;
@@ -2644,13 +2804,24 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
               b64 = await generateNanoImage(promptForGeneration, style);
             }
 
-            setGeneratedContent(prev => ({...prev, [id]: {
-                ...(prev[id] || {images:{}}),
-                status: 'idle',
-                images: {...prev[id]?.images, [type]: b64}
-            }}));
+            setGeneratedContent(prev => {
+                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
+                const mimeType = detectBase64MimeType(b64, type === 'photoreal' ? 'image/jpeg' : 'image/png');
+                return {
+                    ...prev,
+                    [id]: {
+                        ...existing,
+                        status: 'idle',
+                        images: { ...existing.images, [type]: b64 },
+                        imageMimeTypes: { ...existing.imageMimeTypes, [type]: mimeType }
+                    }
+                };
+            });
         } catch (e) {
-            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'error'}}));
+            setGeneratedContent(prev => {
+                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
+                return { ...prev, [id]: { ...existing, status: 'error' } };
+            });
         }
     };
 
@@ -2658,15 +2829,26 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
         if (!showVideoPromptModal) return;
         const item = showVideoPromptModal;
         const id = item.id;
-        setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'loading'}}));
+        setGeneratedContent(prev => {
+            const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
+            return { ...prev, [id]: { ...existing, status: 'loading' } };
+        });
         setShowVideoPromptModal(null);
         try {
-            const image = generatedContent[id]?.images?.photoreal ? { base64: generatedContent[id].images.photoreal!, mimeType: 'image/jpeg' } : undefined;
+            const photoBase64 = generatedContent[id]?.images?.photoreal;
+            const photoMimeType = generatedContent[id]?.imageMimeTypes?.photoreal || detectBase64MimeType(photoBase64, 'image/jpeg');
+            const image = photoBase64 ? { base64: photoBase64, mimeType: photoMimeType } : undefined;
             const videoPrompt = await generateVideoPrompt(item.data.prompt, image, videoPromptInstructions);
-            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'idle', videoPrompt: videoPrompt}}));
+            setGeneratedContent(prev => {
+                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
+                return { ...prev, [id]: { ...existing, status: 'idle', videoPrompt: videoPrompt } };
+            });
             setVideoPromptInstructions("");
         } catch (e) {
-            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'error'}}));
+            setGeneratedContent(prev => {
+                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
+                return { ...prev, [id]: { ...existing, status: 'error' } };
+            });
         }
     };
 
@@ -3321,19 +3503,118 @@ export default function App() {
         return value;
     };
 
-    const analyzeScript = (script: string, totalShots: number): string[] => {
+const sanitizeSentence = (text: string): string => text.replace(/\.+$/, '').trim();
+
+const analyzeScript = (script: string, totalShots: number): string[] => {
         if (!script || script.trim().length === 0) return [];
-        const segments = (script || '').split(/\n\n+/).map(segment => segment.trim()).filter(Boolean);
+        const normalized = (script || '').replace(/\r\n/g, '\n');
+        let segments = normalized.split(/\n\n+/).map(segment => segment.trim()).filter(Boolean);
+
+        if (segments.length <= 1) {
+            const sentences = normalized.split(/(?<=[.!?])\s+/).map(sentence => sentence.trim()).filter(Boolean);
+            if (sentences.length > 0) {
+                const sentencesPerShot = Math.max(1, Math.ceil(sentences.length / totalShots));
+                const grouped: string[] = [];
+                for (let i = 0; i < sentences.length; i += sentencesPerShot) {
+                    grouped.push(sentences.slice(i, i + sentencesPerShot).join(' '));
+                }
+                segments = grouped;
+            }
+        }
+
         if (segments.length === 0) return [];
+
         const scenesPerShot = Math.max(1, Math.ceil(segments.length / totalShots));
         const shotScenes: string[] = [];
         for (let i = 0; i < totalShots; i++) {
-          const startIndex = i * scenesPerShot;
-          const endIndex = Math.min(startIndex + scenesPerShot, segments.length);
-          shotScenes.push(segments.slice(startIndex, endIndex).join(' ') || segments[i] || '');
+            const startIndex = i * scenesPerShot;
+            const endIndex = Math.min(startIndex + scenesPerShot, segments.length);
+            const combined = segments.slice(startIndex, endIndex).join(' ') || segments[Math.min(i, segments.length - 1)] || '';
+            shotScenes.push(truncateNarrativeText(combined, 240));
         }
-        return shotScenes;
-    };
+    return shotScenes;
+};
+
+const buildShotNarrative = (
+    data: PromptData,
+    knowledgeSummaries: KnowledgeSummary[],
+    shotIndex: number,
+    scriptScene?: string
+): string => {
+    const segments: string[] = [];
+
+    const baseNarrative = (scriptScene && scriptScene.trim())
+        || getValueForShot(data.storyBeat, shotIndex)
+        || getValueForShot(data.sceneCore, shotIndex);
+    if (baseNarrative) {
+        segments.push(sanitizeSentence(baseNarrative));
+    }
+
+    const emotion = getValueForShot(data.emotion, shotIndex);
+    if (emotion) {
+        segments.push(`Emotional tone: ${sanitizeSentence(emotion)}`);
+    }
+
+    const toneKeywords = getValueForShot(data.visualToneKeywords, shotIndex);
+    if (toneKeywords) {
+        segments.push(`Visual tone: ${sanitizeSentence(toneKeywords)}`);
+    }
+
+    const cameraSetup = getValueForShot(data.visualCameraSetup, shotIndex) || getValueForShot(data.cameraType, shotIndex);
+    const framing = getValueForShot(data.framing, shotIndex);
+    const focusMotion = getValueForShot(data.visualFocusMotion, shotIndex);
+    const cameraDetails = [cameraSetup && `camera ${cameraSetup}`, framing && `framing ${framing}`, focusMotion && `${focusMotion} focus`]
+        .filter(Boolean)
+        .map(part => sanitizeSentence(part as string));
+    if (cameraDetails.length > 0) {
+        segments.push(`Shot design: ${cameraDetails.join(', ')}`);
+    }
+
+    const cameraMovementDetail = getValueForShot(data.visualCameraMovement, shotIndex);
+    if (cameraMovementDetail) {
+        segments.push(`Camera movement: ${sanitizeSentence(cameraMovementDetail)}`);
+    }
+
+    const lightingMood = getValueForShot(data.visualLightingMood, shotIndex) || getValueForShot(data.lightingStyle, shotIndex);
+    const atmosphere = getValueForShot(data.atmosphere, shotIndex);
+    const lightingSegments = [lightingMood, atmosphere].filter(Boolean).map(value => sanitizeSentence(value as string));
+    if (lightingSegments.length > 0) {
+        segments.push(`Lighting & atmosphere: ${lightingSegments.join(', ')}`);
+    }
+
+    const palette = getValueForShot(data.visualColorPalette, shotIndex) || getValueForShot(data.colorPalette, shotIndex);
+    const grade = getValueForShot(data.colorGrading, shotIndex) || getValueForShot(data.filmEmulation, shotIndex);
+    const colorSegments = [grade && `grade ${grade}`, palette && `palette ${palette}`]
+        .filter(Boolean)
+        .map(value => sanitizeSentence(value as string));
+    if (colorSegments.length > 0) {
+        segments.push(`Color approach: ${colorSegments.join(', ')}`);
+    }
+
+    if (knowledgeSummaries.length > 0) {
+        const knowledge = knowledgeSummaries[shotIndex % knowledgeSummaries.length];
+        if (knowledge?.summary) {
+            const docName = knowledge.doc?.name || 'Knowledge Insight';
+            segments.push(`Guided by ${docName}: ${sanitizeSentence(knowledge.summary)}`);
+        }
+    }
+
+    const cleanedSegments = segments
+        .map(segment => segment.replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+
+    if (cleanedSegments.length === 0) {
+        return 'A cinematic beat expanding on the evolving story world.';
+    }
+
+    const narrative = cleanedSegments.join('. ');
+    return truncateNarrativeText(narrative, 240);
+};
+
+const buildKnowledgeContextForVisuals = useCallback(() => {
+        const summaries = selectRelevantKnowledgeDocs(knowledgeDocs, promptData, 3);
+        return summaries.map(summary => `${summary.doc.name}: ${summary.summary}`).join('\n');
+    }, [knowledgeDocs, promptData]);
 
     const generatePrompt = async () => {
         try {
@@ -3346,19 +3627,23 @@ export default function App() {
             const shotTypeArray = parsedShotTypes.length > 0 ? parsedShotTypes : defaultShotTypes;
             const shotScenes = promptData.scriptText ? analyzeScript(promptData.scriptText, numberOfShots) : [];
 
+            const knowledgeSummaries = selectRelevantKnowledgeDocs(knowledgeDocs, promptData, 3);
+            const knowledgeContext = knowledgeSummaries.map(summary => `${summary.doc.name}: ${summary.summary}`).join('\n');
+
             const newShotItems: ShotItem[] = [];
             for (let i = 0; i < numberOfShots; i++) {
                 const newItemId = crypto.randomUUID();
+                const sceneNarrative = buildShotNarrative(promptData, knowledgeSummaries, i, shotScenes[i]);
                 const shotPrompt: ShotPrompt = {
                     shotNumber: i + 1,
-                    prompt: `Placeholder for Shot ${i+1}`,
-                    originalPrompt: `Placeholder for Shot ${i+1}`,
-                    description: shotScenes[i] || getValueForShot(promptData.sceneCore, i),
+                    prompt: `Placeholder for Shot ${i + 1}`,
+                    originalPrompt: `Placeholder for Shot ${i + 1}`,
+                    description: sceneNarrative,
                     role: shotTypeArray[i % shotTypeArray.length]
                 };
                 newShotItems.push({ id: newItemId, type: 'shot', data: shotPrompt });
             }
-            
+
             const updates: { comp: Record<string, CompositionData>, light: Record<string, LightingData>, color: Record<string, ColorGradingData>, move: Record<string, CameraMovementData> } = { comp: {}, light: {}, color: {}, move: {} };
             newShotItems.forEach(item => {
                 updates.comp[item.id] = clone(defaultComposition);
@@ -3379,24 +3664,27 @@ export default function App() {
                             lighting: updates.light[item.id],
                             color: updates.color[item.id],
                             camera: updates.move[item.id],
-                        });
+                        }, knowledgeContext);
                         const prompt = `Cinematic shot ${item.data.shotNumber}: ${item.data.role}. Scene: ${item.data.description}. ${smartDesc}`;
                         return { ...item, data: { ...item.data, prompt, originalPrompt: prompt } };
                     } catch (itemError) {
                         appLogger.error(`Failed to generate smart description for shot ${item.data.shotNumber}:`, itemError);
                         // Provide fallback description
-                        const fallbackPrompt = `Cinematic shot ${item.data.shotNumber}: ${item.data.role}. Scene: ${item.data.description}. A visually compelling scene with cinematic composition and lighting.`;
+                        const knowledgeFlavor = knowledgeSummaries[0]?.summary ? ` Knowledge focus: ${knowledgeSummaries[0].summary}.` : '';
+                        const fallbackPrompt = `Cinematic shot ${item.data.shotNumber}: ${item.data.role}. Scene: ${item.data.description}. A visually compelling scene with cinematic composition and lighting.${knowledgeFlavor}`;
                         return { ...item, data: { ...item.data, prompt: fallbackPrompt, originalPrompt: fallbackPrompt } };
                     }
                 }));
 
                 setTimelineItems(finalItems);
                 setStage('final');
+                setGeneratedContent({});
             } catch (promiseError) {
                 appLogger.error('Failed to generate visual descriptions:', promiseError);
                 // Still proceed with basic shot items
                 setTimelineItems(newShotItems);
                 setStage('final');
+                setGeneratedContent({});
             }
         } catch (error) {
             handleError(error, { showUserMessage: true, context: 'Prompt Generation' });
@@ -3619,9 +3907,10 @@ export default function App() {
             };
 
             try {
-                const smartDesc = await generateSmartVisualDescription(visualData);
+                const knowledgeContext = buildKnowledgeContextForVisuals();
+                const smartDesc = await generateSmartVisualDescription(visualData, knowledgeContext);
                 const newPrompt = `Cinematic shot ${item.data.shotNumber}: ${item.data.role}. Scene: ${item.data.description}. ${smartDesc}`;
-                
+
                 setTimelineItems(prev => (prev || []).map(i => i.id === timelineItemId && i.type === 'shot' ? {...i, data: {...i.data, prompt: newPrompt }} : i));
             } catch (aiError) {
                 appLogger.error('Failed to generate smart visual description:', aiError);
