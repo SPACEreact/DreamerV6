@@ -3194,6 +3194,11 @@ export default function App() {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [isLoadingProgress, setIsLoadingProgress] = useState(true);
 
+    // Helper function for knowledge context
+    const buildKnowledgeContextForVisuals = useCallback(() => {
+        const summaries = selectRelevantKnowledgeDocs(knowledgeDocs, promptData, 3);
+        return summaries.map(summary => `${summary.doc.name}: ${summary.summary}`).join('\n');
+    }, [knowledgeDocs, promptData]);
 
     const presetFileInputRef = useRef<HTMLInputElement>(null);
     const saveInProgressRef = useRef<boolean>(false);
@@ -3610,11 +3615,6 @@ const buildShotNarrative = (
     const narrative = cleanedSegments.join('. ');
     return truncateNarrativeText(narrative, 240);
 };
-
-const buildKnowledgeContextForVisuals = useCallback(() => {
-        const summaries = selectRelevantKnowledgeDocs(knowledgeDocs, promptData, 3);
-        return summaries.map(summary => `${summary.doc.name}: ${summary.summary}`).join('\n');
-    }, [knowledgeDocs, promptData]);
 
     const generatePrompt = async () => {
         try {
