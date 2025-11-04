@@ -469,6 +469,16 @@ const formatValue = (value: string | string[] | boolean | undefined): string => 
     return String(value);
 };
 
+// Clean AI suggestion text by removing unwanted characters
+const cleanSuggestion = (text: string): string => {
+    return text
+        .replace(/["'"]/g, '') // Remove quotation marks
+        .replace(/\*/g, '') // Remove asterisks
+        .replace(/,/g, ' ') // Replace commas with spaces
+        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+        .trim();
+};
+
 const getCameraLinePosition = (height: string, angle: string): { x1: number; y1: number; x2: number; y2: number } => {
     const heightMap: Record<string, { y1: number; y2: number }> = {
       'ground-level soul gaze': { y1: STAGE_HEIGHT, y2: (STAGE_HEIGHT * 2) / 3 },
@@ -1204,17 +1214,18 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {(currentQuestion?.options || []).map((option) => { 
-                        const currentValue = promptData[currentQuestion.id as keyof PromptData]; 
-                        const isSelected = multipleMode ? Array.isArray(currentValue) && currentValue.includes(option) : formatValue(currentValue) === option; 
+                        const currentValue = promptData[currentQuestion.id as keyof PromptData];
+                        const cleanedOption = cleanSuggestion(option);
+                        const isSelected = multipleMode ? Array.isArray(currentValue) && currentValue.includes(cleanedOption) : formatValue(currentValue) === cleanedOption; 
                         return (
                           <motion.button 
                             key={option} 
                             whileHover={{ scale: 1.02 }} 
                             whileTap={{ scale: 0.98 }} 
-                            onClick={() => multipleMode ? toggleMultipleSelection(option) : handleAnswer(currentQuestion.id as keyof PromptData, option)} 
+                            onClick={() => multipleMode ? toggleMultipleSelection(cleanedOption) : handleAnswer(currentQuestion.id as keyof PromptData, cleanedOption)} 
                             className={`p-5 rounded-xl border-2 transition-all text-left ${ isSelected ? 'bg-amber-500/20 border-amber-500 text-amber-100' : 'bg-gray-900 border-gray-800 hover:border-gray-700 text-white hover:bg-gray-800' }`}
                           >
-                            <span className="text-base font-medium">{option}</span>
+                            <span className="text-base font-medium">{cleanedOption}</span>
                           </motion.button>
                         ); 
                       })}
@@ -1363,23 +1374,26 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
                   animate={{ opacity: 1, y: 0 }} 
                   className="space-y-3 max-h-96 overflow-y-auto pr-2"
                 >
-                  {(aiSuggestions || []).map((suggestion, index) => (
-                    <motion.button 
-                      key={index} 
-                      initial={{ opacity: 0, x: -10 }} 
-                      animate={{ opacity: 1, x: 0 }} 
-                      transition={{ delay: index * 0.1 }} 
-                      whileHover={{ scale: 1.01, x: 4 }} 
-                      whileTap={{ scale: 0.99 }} 
-                      onClick={() => handleAnswer(currentQuestion.id as keyof PromptData, suggestion)} 
-                      className="w-full p-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-left transition-all group flex-shrink-0"
-                    >
-                      <div className="flex items-start space-x-3">
-                        <span className="text-amber-400 text-lg group-hover:scale-110 transition-transform">✨</span>
-                        <span className="text-gray-200 text-base leading-relaxed group-hover:text-white transition-colors">{suggestion}</span>
-                      </div>
-                    </motion.button>
-                  ))}
+                  {(aiSuggestions || []).map((suggestion, index) => {
+                    const cleanedSuggestion = cleanSuggestion(suggestion);
+                    return (
+                      <motion.button 
+                        key={index} 
+                        initial={{ opacity: 0, x: -10 }} 
+                        animate={{ opacity: 1, x: 0 }} 
+                        transition={{ delay: index * 0.1 }} 
+                        whileHover={{ scale: 1.01, x: 4 }} 
+                        whileTap={{ scale: 0.99 }} 
+                        onClick={() => handleAnswer(currentQuestion.id as keyof PromptData, cleanedSuggestion)} 
+                        className="w-full p-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-left transition-all group flex-shrink-0"
+                      >
+                        <div className="flex items-start space-x-3">
+                          <span className="text-amber-400 text-lg group-hover:scale-110 transition-transform">✨</span>
+                          <span className="text-gray-200 text-base leading-relaxed group-hover:text-white transition-colors">{cleanedSuggestion}</span>
+                        </div>
+                      </motion.button>
+                    );
+                  })}
                 </motion.div>
               )}
             </motion.div>
