@@ -33,6 +33,13 @@ const defaultCameraMovement: CameraMovementData = { movementType: 'static contem
  * Dynamic Token Budgeting System for Optimized API Usage
  */
 class TokenBudgetingSystem {
+    MIN_TOKENS: number;
+    MAX_TOKENS: number;
+    SAFE_MARGIN: number;
+    complexityMultipliers: Record<string, number>;
+    performanceHistory: Map<string, any>;
+    successPatterns: Map<string, any>;
+
     constructor() {
         this.MIN_TOKENS = 1024;
         this.MAX_TOKENS = 4096;
@@ -473,7 +480,8 @@ const generateStoryboardWithRetry = async (
     script: string, 
     style: 'cinematic' | 'explainer', 
     customInstructions: string, 
-    maxTokens: number
+    maxTokens: number,
+    attempt: number = 1
 ): Promise<StoryboardShot[]> => {
     try {
         const instructionsSection = customInstructions.trim() 

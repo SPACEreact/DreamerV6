@@ -87,7 +87,7 @@ import {
 } from './types';
 import { SoundDesignModule } from './components/SoundDesignModule';
 import { CastingAssistant } from './components/CastingAssistant';
-import { DualProviderCastingAssistant } from './components/DualProviderCastingAssistant';
+// import { DualProviderCastingAssistant } from './components/DualProviderCastingAssistant';
 import { DualProviderAudioGeneration } from './components/DualProviderAudioGeneration';
 import { VisualProgressTracker } from './components/VisualProgressTracker';
 import { StoryIdeation } from './components/StoryIdeation';
