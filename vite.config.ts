@@ -15,9 +15,10 @@ export default defineConfig(({ mode }) => {
       clearScreen: false,
       plugins: [react()],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY),
-        'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY)
+        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || 'AIzaSyBPs9SZIbFgYzGa0Q8IzOZ2_votD3GzT_s'),
+        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || 'AIzaSyBPs9SZIbFgYzGa0Q8IzOZ2_votD3GzT_s'),
+        'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || 'AIzaSyBPs9SZIbFgYzGa0Q8IzOZ2_votD3GzT_s'),
+        'import.meta.env.VITE_GOOGLE_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || 'AIzaSyBPs9SZIbFgYzGa0Q8IzOZ2_votD3GzT_s')
       },
       resolve: {
         alias: {
