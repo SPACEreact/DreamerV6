@@ -32,27 +32,21 @@ const extractCleanSuggestions = (text: string): string[] => {
         // Skip very short lines (likely not meaningful suggestions)
         if (cleanLine.length < 8) continue;
         
-        // Target the specific problematic patterns we identified
+        // Target the most problematic narrative patterns only
         const problematicPatterns = [
             /^(here|these|below|following|this|here's|here are|here is)/i,
-            /^(suggestion|tip|option|idea|recommendation|approach)/i,
             /^based on|^context:|^current question:|^scenario:/i,
             /^(remember|note that|keep in mind|bear in mind)/i,
-            /^(you might want to|you should try|you could consider)/i,
-            /^(explanation|description|analysis|suggestions are|ideas are)/i,
-            /^do you|^are you|^have you|^will you|^can you/i,
+            /^you might want to|^you should try|^you could consider/i,
             /^(the character|the scene|the story|the plot)/i,
             /^(as the|while the|during the|when the)/i,
-            /^(subtext|implied|underlying|hidden|meaning)/i,
-            /^(arc|journey|transformation|development|growth)/i,
             
-            // Specific story arc and subtext content from knowledge base
+            // Only specific story arc and subtext content
             /(inject subtext|hint at deeper|unspoken emotions|underlying tensions)/i,
             /(every scene should have|mini-arc|transforming the character)/i,
             /(who wants what from whom|what happens if they|why now)/i,
             /(subtext is the unsaid|what's felt|implied or hinted)/i,
-            /(story arc|scene arc|transformation)/i,
-            /(driving questions|powerful scene|character development)/i
+            /(driving questions|powerful scene)/i
         ];
         
         // Skip only if it matches specific problematic patterns
@@ -61,7 +55,7 @@ const extractCleanSuggestions = (text: string): string[] => {
         }
         
         // Skip lines that are clearly explanations (very long with periods)
-        if (cleanLine.length > 150 && cleanLine.endsWith('.')) {
+        if (cleanLine.length > 200 && cleanLine.endsWith('.')) {
             continue;
         }
         
@@ -235,17 +229,15 @@ export const getAISuggestions = async (context: string, currentQuestion: string,
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: `You are a cinematography expert. Provide 3-5 creative suggestions for this question.
+            contents: `You are a cinematography expert. Provide 3-5 specific, practical suggestions for this question.
 
-Focus on practical cinematography techniques - camera angles, lighting setups, composition rules, framing, lens choices, and visual aesthetics. Avoid excessive narrative or storytelling explanations.
-
-Each suggestion should be a short, actionable response (1-2 sentences) that directly answers the question.
+Focus on technical cinematography aspects: camera work, lighting setups, composition techniques, framing methods, lens choices, visual aesthetics, and filming approaches. Each suggestion should directly address the question with actionable advice.
 
 Current question: "${currentQuestion}"
 
 Context: ${enhancedContext}
 
-Provide your suggestions:`,
+Provide your cinematography suggestions:`,
             config: {
 
             }
@@ -312,15 +304,16 @@ export const getKnowledgeBasedSuggestions = async (
                 
                 // Generate knowledge-based suggestions
                 techniques.slice(0, 2).forEach(technique => {
-                    // Targeted filter to skip only obvious narrative/writing concepts
+                    // Very targeted filter to skip only clear narrative/writing concepts
                     const narrativeTerms = [
                         'subtext', 'arc', 'story', 'dialogue', 'character development', 
-                        'scene arc', 'narrative', 'plot', 'hero', 'journey', 'quest',
-                        'stakes', 'emotion', 'psychology', 'writing', 'script', 'screenplay',
-                        'theme', 'thematic', 'symbolic', 'metaphor', 'allegory',
+                        'scene arc', 'narrative', 'plot', 'hero', 'quest', 'adventure',
+                        'stakes', 'psychology', 'writing', 'script', 'screenplay',
+                        'theme', 'thematic', 'symbolic', 'metaphor',
                         'backstory', 'exposition', 'prologue', 'epilogue', 'chapter',
-                        'adventure', 'challenge', 'obstacle', 'goal', 'desire', 'want', 'need',
-                        'motivation', 'drive', 'growth', 'evolution', 'relationship'
+                        'challenge', 'obstacle', 'goal', 'desire', 'want', 'need',
+                        'motivation', 'drive', 'growth', 'evolution', 'relationship',
+                        'transformation', 'journey'
                     ];
                     
                     const techniqueLower = technique.toLowerCase();
@@ -343,11 +336,11 @@ export const getKnowledgeBasedSuggestions = async (
             model: 'gemini-2.0-flash-exp',
             contents: `Based on this context, provide 2-3 specific suggestions for: "${currentQuestion}"
 
-Focus on practical cinematography techniques - camera work, lighting, composition, and visual methods. Keep suggestions concise and actionable.
+Focus on technical cinematography techniques: camera angles, lighting setups, composition rules, framing methods, visual aesthetics, and filming approaches. Keep suggestions concise and directly actionable.
 
 Context: ${enhancedContext}
 
-Provide your suggestions:`,
+Provide your cinematography suggestions:`,
         });
 
         const aiSuggestions = extractCleanSuggestions(aiResponse.text);
