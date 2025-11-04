@@ -9,8 +9,16 @@ import { geminiLogger } from '../lib/logger';
 import { handleAIServiceError, sanitizeErrorMessage } from '../lib/errorHandler';
 import { API_CONFIG, NUMERIC } from '../constants';
 
-// The GoogleGenAI instance is initialized with the API key from environment variables as per guidelines.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Initialize GoogleGenAI with the Vite-provided Gemini API key.
+const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_GOOGLE_API_KEY;
+
+if (!geminiApiKey) {
+  const errorMessage = 'Missing Gemini API key. Set VITE_GEMINI_API_KEY (or VITE_GOOGLE_API_KEY) in your environment.';
+  geminiLogger.error(errorMessage);
+  throw new Error(errorMessage);
+}
+
+const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
 /**
  * Enhanced error handler specifically for Gemini AI service
