@@ -37,14 +37,36 @@ export class DualProviderImageService {
 
   private async initializeProviders(): Promise<void> {
     try {
+      const stableDiffusionConfig = this.config.providers.stableDiffusionXL;
+      if (!stableDiffusionConfig.apiKey) {
+        const message =
+          'Hugging Face API token is missing. Please set VITE_HUGGING_FACE_TOKEN in your environment.';
+        showErrorToast({
+          title: 'Missing Hugging Face token',
+          description: message
+        });
+        throw new Error(message);
+      }
+
       // Initialize Stable Diffusion XL provider
       const sdxlProvider = new StableDiffusionXLProvider();
-      await sdxlProvider.init(this.config.providers.stableDiffusionXL);
+      await sdxlProvider.init(stableDiffusionConfig);
       this.providers.set('stable-diffusion-xl', sdxlProvider);
+
+      const geminiConfig = this.config.providers.gemini;
+      if (!geminiConfig.apiKey) {
+        const message =
+          'Gemini API key is missing. Please set VITE_GEMINI_API_KEY in your environment.';
+        showErrorToast({
+          title: 'Missing Gemini API key',
+          description: message
+        });
+        throw new Error(message);
+      }
 
       // Initialize Gemini provider
       const geminiProvider = new GeminiImageProvider();
-      await geminiProvider.init(this.config.providers.gemini);
+      await geminiProvider.init(geminiConfig);
       this.providers.set('gemini', geminiProvider);
 
       console.log('[Dual-Provider Service] All providers initialized');
@@ -445,6 +467,9 @@ export class DualProviderImageService {
  * Create and configure the dual-provider service
  */
 export function createDualProviderImageService(): DualProviderImageService {
+  const huggingFaceToken = (import.meta.env.VITE_HUGGING_FACE_TOKEN || '').trim();
+  const geminiApiKey = (import.meta.env.VITE_GEMINI_API_KEY || '').trim();
+
   const config: ImageGenerationConfig = {
     providers: {
       stableDiffusionXL: {
@@ -452,7 +477,7 @@ export function createDualProviderImageService(): DualProviderImageService {
         timeoutMs: 60000,
         maxRetries: 3,
         baseBackoffMs: 1000,
-        apiKey: process.env.HUGGING_FACE_TOKEN || '', // Will need to be set
+        apiKey: huggingFaceToken,
         baseUrl: 'https://api-inference.huggingface.co/models',
         model: 'stabilityai/stable-diffusion-xl-base-1.0'
       },
@@ -461,7 +486,7 @@ export function createDualProviderImageService(): DualProviderImageService {
         timeoutMs: 45000,
         maxRetries: 3,
         baseBackoffMs: 1000,
-        apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || ''
+        apiKey: geminiApiKey
       }
     },
     defaultProvider: 'stable-diffusion-xl',
