@@ -120,25 +120,18 @@ export class DualProviderCastingService {
         const errorA = resultA.status === 'rejected' ? resultA.reason : null;
         const errorB = resultB.status === 'rejected' ? resultB.reason : null;
         
-        showErrorToast({ 
-          title: 'Both casting providers failed',
-          description: 'Unable to generate casting recommendations'
-        });
+        showErrorToast('Both casting providers failed');
 
         throw new Error(`Both providers failed: A: ${errorA}, B: ${errorB}`);
       }
 
       // If one failed, use the successful one
       if (!primaryResponse && secondaryResponse) {
-        showWarningToast({ 
-          title: `Provider ${request.providerA} failed, using ${request.providerB}`
-        });
+        showWarningToast(`Provider ${request.providerA} failed, using ${request.providerB}`);
         primaryResponse = secondaryResponse;
         secondaryResponse = undefined;
       } else if (primaryResponse && !secondaryResponse) {
-        showWarningToast({ 
-          title: `Provider ${request.providerB} failed, using ${request.providerA}`
-        });
+        showWarningToast(`Provider ${request.providerB} failed, using ${request.providerA}`);
       }
 
       // Cross-validation if both succeeded
@@ -201,10 +194,7 @@ export class DualProviderCastingService {
         totalGenerationTime: Date.now() - startTime
       };
 
-      showSuccessToast({ 
-        title: 'Casting recommendations generated',
-        description: `${consensusRecommendations.length} actors recommended`
-      });
+      showSuccessToast('Casting recommendations generated');
 
       console.log('[Dual-Provider Casting Service] Generation complete', {
         requestId,
@@ -219,14 +209,12 @@ export class DualProviderCastingService {
       console.error('[Dual-Provider Casting Service] Generation failed:', error);
       
       const apiError = createAPIError(
-        error instanceof Error ? error.message : String(error),
-        {
-          service: 'Dual-Provider Casting Service',
-          operation: 'generateDualProvider'
-        },
-        error
+        error instanceof Error ? error.message : String(error)
       );
-      logAPIError(apiError);
+      logAPIError(error, {
+        service: 'Dual-Provider Casting Service',
+        operation: 'generateDualProvider'
+      });
 
       throw error;
     }
@@ -255,9 +243,7 @@ export class DualProviderCastingService {
         const fallbackProvider = this.providers.get(fallbackProviderId);
         
         if (fallbackProvider) {
-          showWarningToast({ 
-            title: `Failing over to ${fallbackProviderId}`
-          });
+          showWarningToast(`Failing over to ${fallbackProviderId}`);
           
           try {
             return await fallbackProvider.generateCasting(request);
