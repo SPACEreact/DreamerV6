@@ -45,7 +45,15 @@ const extractCleanSuggestions = (text: string): string[] => {
             /^(the character|the scene|the story|the plot)/i,
             /^(as the|while the|during the|when the)/i,
             /^(subtext|implied|underlying|hidden|meaning)/i,
-            /^(arc|journey|transformation|development|growth)/i
+            /^(arc|journey|transformation|development|growth)/i,
+            
+            // Specific story arc and subtext content from knowledge base
+            /(inject subtext|hint at deeper|unspoken emotions|underlying tensions)/i,
+            /(every scene should have|mini-arc|transforming the character)/i,
+            /(who wants what from whom|what happens if they|why now)/i,
+            /(subtext is the unsaid|what's felt|implied or hinted)/i,
+            /(story arc|scene arc|transformation)/i,
+            /(driving questions|powerful scene|character development)/i
         ];
         
         // Skip only if it matches specific problematic patterns
