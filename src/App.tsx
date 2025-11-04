@@ -1603,6 +1603,18 @@ const StoryboardPage: React.FC<{
     };
 
     const estimatedSeconds = progress ? Math.max(0, Math.round(progress.estimatedMsRemaining / 1000)) : 0;
+    const isScriptReady = script.trim().length > 0;
+
+    const primaryCtaClasses = [
+        'w-full sm:w-auto px-8 py-4 text-base font-semibold text-white rounded-lg shadow-lg shadow-purple-900/30',
+        'flex items-center justify-center space-x-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed',
+        'bg-gradient-to-r',
+        isScriptReady ? 'from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700' : 'from-slate-600 to-slate-700',
+        isLoading ? 'cursor-wait' : 'cursor-pointer',
+        !isScriptReady ? 'opacity-60' : '',
+    ]
+        .filter(Boolean)
+        .join(' ');
 
     const handleStoryIdeationComplete = (context: Partial<StoryContext>, generatedScript: string) => {
         // Add the generated script to the existing script content
@@ -1674,25 +1686,14 @@ const StoryboardPage: React.FC<{
                             <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
                                 <motion.button
                                     onClick={handleGenerateStoryboard}
-                                    disabled={isLoading || !script.trim()}
-                                    whileHover={!isLoading && script.trim() ? { scale: 1.02 } : undefined}
-                                    whileTap={!isLoading && script.trim() ? { scale: 0.98 } : undefined}
-                                    className={`w-full sm:w-auto px-8 py-4 text-base font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg shadow-lg shadow-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-all duration-200 ${
-                                        !script.trim() ? 'opacity-60' : ''
-                                    } ${
-                                        isLoading ? 'cursor-wait' : 'cursor-pointer hover:from-purple-700 hover:to-indigo-700'
-                                    }`}
-                                    style={{
-                                        background: isLoading
-                                            ? 'linear-gradient(to right, #8b5cf6, #6366f1)'
-                                            : !script.trim()
-                                                ? 'linear-gradient(to right, #6b7280, #4b5563)'
-                                                : 'linear-gradient(to right, #9333ea, #4f46e5)'
-                                    }}
+                                    disabled={isLoading || !isScriptReady}
+                                    whileHover={!isLoading && isScriptReady ? { scale: 1.02 } : undefined}
+                                    whileTap={!isLoading && isScriptReady ? { scale: 0.98 } : undefined}
+                                    className={primaryCtaClasses}
                                 >
                                     {isLoading && <div className="w-5 h-5 animate-spin rounded-full border-2 border-gray-300 border-t-white" />}
                                     <span>
-                                        {!script.trim()
+                                        {!isScriptReady
                                             ? 'Enter Script First'
                                             : isLoading
                                                 ? 'Generating...'
