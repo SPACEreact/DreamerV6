@@ -40,7 +40,6 @@ const extractCleanSuggestions = (text: string): string[] => {
             /^(remember|note that|keep in mind|bear in mind)/i,
             /^(you might want to|you should try|you could consider)/i,
             /^(explanation|description|analysis|suggestions are|ideas are)/i,
-            /^what|how|why|when|where|who|which|should/i,
             /^do you|^are you|^have you|^will you|^can you/i,
             /^(the character|the scene|the story|the plot)/i,
             /^(as the|while the|during the|when the)/i,
@@ -238,7 +237,7 @@ export const getAISuggestions = async (context: string, currentQuestion: string,
             model: 'gemini-2.0-flash-exp',
             contents: `You are a cinematography expert. Provide 3-5 creative suggestions for this question.
 
-CRITICAL: Focus ONLY on technical cinematography techniques like camera work, lighting, lens choices, composition, framing, and visual aesthetics. DO NOT include story elements, character development, plot analysis, dialogue, emotional descriptions, or storytelling concepts.
+Focus on practical cinematography techniques - camera angles, lighting setups, composition rules, framing, lens choices, and visual aesthetics. Avoid excessive narrative or storytelling explanations.
 
 Each suggestion should be a short, actionable response (1-2 sentences) that directly answers the question.
 
@@ -246,7 +245,7 @@ Current question: "${currentQuestion}"
 
 Context: ${enhancedContext}
 
-Provide your technical cinematography suggestions:`,
+Provide your suggestions:`,
             config: {
 
             }
@@ -313,24 +312,15 @@ export const getKnowledgeBasedSuggestions = async (
                 
                 // Generate knowledge-based suggestions
                 techniques.slice(0, 2).forEach(technique => {
-                    // Comprehensive filter to skip narrative/writing concepts
+                    // Targeted filter to skip only obvious narrative/writing concepts
                     const narrativeTerms = [
-                        'subtext', 'arc', 'story', 'dialogue', 'character development', 'scene arc', 
-                        'transformation', 'character', 'storytelling', 'narrative', 'plot', 'hero',
-                        'journey', 'conflict', 'stakes', 'tension', 'emotion', 'psychology',
-                        'dialogue', 'convers', 'monologue', 'voice', 'narration', 'voiceover',
-                        'script', 'screenplay', 'screenwriting', 'writing', 'writer', 'author',
-                        'theme', 'thematic', 'symbolic', 'symbolism', 'metaphor', 'allegory',
-                        'heroic', 'mentor', 'ally', 'shadow', 'antagonist', 'protagonist',
-                        'call to adventure', 'refusal', 'ordinary world', 'unknown',
-                        'inciting incident', 'climax', 'resolution', 'denouement',
-                        'backstory', 'flashback', 'flash forward', 'non-linear',
-                        'exposition', 'prologue', 'epilogue', 'chapter',
-                        'adventure', 'quest', 'challenge', 'obstacle', 'obstacle',
-                        'goal', 'desire', 'want', 'need', 'motivation', 'drive',
-                        'transformation', 'growth', 'change', 'evolution',
-                        'relationship', 'dynamic', 'interaction', 'connection',
-                        'comedy', 'drama', 'action', 'romance', 'horror', 'thriller'
+                        'subtext', 'arc', 'story', 'dialogue', 'character development', 
+                        'scene arc', 'narrative', 'plot', 'hero', 'journey', 'quest',
+                        'stakes', 'emotion', 'psychology', 'writing', 'script', 'screenplay',
+                        'theme', 'thematic', 'symbolic', 'metaphor', 'allegory',
+                        'backstory', 'exposition', 'prologue', 'epilogue', 'chapter',
+                        'adventure', 'challenge', 'obstacle', 'goal', 'desire', 'want', 'need',
+                        'motivation', 'drive', 'growth', 'evolution', 'relationship'
                     ];
                     
                     const techniqueLower = technique.toLowerCase();
@@ -353,11 +343,11 @@ export const getKnowledgeBasedSuggestions = async (
             model: 'gemini-2.0-flash-exp',
             contents: `Based on this context, provide 2-3 specific suggestions for: "${currentQuestion}"
 
-CRITICAL: Focus ONLY on technical cinematography techniques like camera angles, lighting setups, lens choices, composition rules, movement patterns, framing techniques, visual aesthetics. DO NOT include story elements, character development, plot analysis, dialogue, emotional descriptions, narrative structure, or storytelling concepts.
+Focus on practical cinematography techniques - camera work, lighting, composition, and visual methods. Keep suggestions concise and actionable.
 
 Context: ${enhancedContext}
 
-Provide your technical cinematography suggestions:`,
+Provide your suggestions:`,
         });
 
         const aiSuggestions = extractCleanSuggestions(aiResponse.text);
