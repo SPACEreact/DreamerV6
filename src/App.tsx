@@ -3305,10 +3305,15 @@ export default function App() {
 
     const generatePrompt = async () => {
         try {
-            const numberOfShots = parseInt(formatValue(promptData.numberOfShots)) || 3;
-            const shotTypeArray = ((formatValue(promptData.numberOfShots) || 'medium shot, close up, wide shot') as string).split(',').map(s => s.trim());
+            const numberOfShots = parseInt(formatValue(promptData.numberOfShots), 10) || 3;
+            const defaultShotTypes = ['medium shot', 'close up', 'wide shot'];
+            const parsedShotTypes = (formatValue(promptData.shotTypes) || '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+            const shotTypeArray = parsedShotTypes.length > 0 ? parsedShotTypes : defaultShotTypes;
             const shotScenes = promptData.scriptText ? analyzeScript(promptData.scriptText, numberOfShots) : [];
-            
+
             const newShotItems: ShotItem[] = [];
             for (let i = 0; i < numberOfShots; i++) {
                 const newItemId = crypto.randomUUID();
