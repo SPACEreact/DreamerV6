@@ -1320,7 +1320,7 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
               {(knowledgeInsights || []).length > 0 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-amber-900/20 border border-amber-700/30 rounded-xl space-y-3">
                   <h4 className="text-amber-400 text-base font-semibold">📚 Relevant Knowledge</h4>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                     {(knowledgeInsights || []).map((insight, index) => (
                       <div key={index} className="text-amber-300 text-sm leading-relaxed">{insight}</div>
                     ))}
@@ -1349,7 +1349,7 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
               {(genreSuggestions || []).length > 0 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-blue-900/20 border border-blue-700/30 rounded-xl space-y-3">
                   <h4 className="text-blue-400 text-base font-semibold">🎬 Genre-Specific Tips</h4>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                     {(genreSuggestions || []).map((suggestion, index) => (
                       <div key={index} className="text-blue-300 text-sm leading-relaxed">{suggestion}</div>
                     ))}
@@ -1361,7 +1361,7 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }} 
                   animate={{ opacity: 1, y: 0 }} 
-                  className="space-y-3"
+                  className="space-y-3 max-h-96 overflow-y-auto pr-2"
                 >
                   {(aiSuggestions || []).map((suggestion, index) => (
                     <motion.button 
@@ -1372,7 +1372,7 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
                       whileHover={{ scale: 1.01, x: 4 }} 
                       whileTap={{ scale: 0.99 }} 
                       onClick={() => handleAnswer(currentQuestion.id as keyof PromptData, suggestion)} 
-                      className="w-full p-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-left transition-all group"
+                      className="w-full p-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-left transition-all group flex-shrink-0"
                     >
                       <div className="flex items-start space-x-3">
                         <span className="text-amber-400 text-lg group-hover:scale-110 transition-transform">✨</span>
