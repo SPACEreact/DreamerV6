@@ -2,6 +2,20 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Gemini API configuration
+
+AI-powered features rely on Google's Gemini APIs. Create a `.env.local` (or update your existing environment file) and provide one of the following keys so the app can authenticate at runtime:
+
+```bash
+# Preferred variable name
+VITE_GEMINI_API_KEY=your_gemini_api_key
+
+# Optional fallback supported by the app
+VITE_GOOGLE_API_KEY=your_gemini_api_key
+```
+
+If neither variable is defined the application will throw a clear error when Gemini-powered features are used, helping you catch missing configuration early.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
