@@ -9,7 +9,7 @@ import { geminiLogger } from '../lib/logger';
 import { handleAIServiceError, sanitizeErrorMessage } from '../lib/errorHandler';
 import { API_CONFIG, NUMERIC } from '../constants';
 
-// Helper function to extract clean suggestions - ultra-strict filtering
+// Helper function to extract clean suggestions - balanced filtering
 const extractCleanSuggestions = (text: string): string[] => {
     const lines = text.split('\n')
         .map(line => line.trim())
@@ -24,7 +24,6 @@ const extractCleanSuggestions = (text: string): string[] => {
             .replace(/^\* /,'')
             .replace(/^\d+\. /,'')
             .replace(/^[•-] /,'')
-            .replace(/^• /,'')
             .trim();
         
         // Skip empty lines
@@ -33,66 +32,29 @@ const extractCleanSuggestions = (text: string): string[] => {
         // Skip very short lines (likely not meaningful suggestions)
         if (cleanLine.length < 8) continue;
         
-        // Ultra-strict pattern filtering for unwanted content
-        const unwantedPatterns = [
-            // Intro/explanation patterns
+        // Target the specific problematic patterns we identified
+        const problematicPatterns = [
             /^(here|these|below|following|this|here's|here are|here is)/i,
-            /^(suggestion|tip|option|idea|recommendation|approach|technique)/i,
-            /^based on|^context:|^current question:|^scenario:|^for:/i,
-            /^(remember|note that|keep in mind|bear in mind|important)/i,
-            /^(you might want to|you should try|you could consider|consider using)/i,
-            /^(explanation|description|analysis|suggestions are|ideas are|techniques include)/i,
-            /^(to get|to achieve|to create|to make|to use|to apply)/i,
-            /^(this will|this can|this helps|this creates)/i,
-            
-            // Question patterns
+            /^(suggestion|tip|option|idea|recommendation|approach)/i,
+            /^based on|^context:|^current question:|^scenario:/i,
+            /^(remember|note that|keep in mind|bear in mind)/i,
+            /^(you might want to|you should try|you could consider)/i,
+            /^(explanation|description|analysis|suggestions are|ideas are)/i,
             /^what|how|why|when|where|who|which|should/i,
-            /^(do you|are you|have you|will you|can you|would you)/i,
-            /^(is there|are there|do they|will this|can this)/i,
-            
-            // Story/narrative patterns (the main problem)
+            /^do you|^are you|^have you|^will you|^can you/i,
             /^(the character|the scene|the story|the plot)/i,
             /^(as the|while the|during the|when the)/i,
-            /^(suddenly|meanwhile|eventually|then|after|before)/i,
-            /^(reveals|discovers|realizes|decides|chooses)/i,
-            /^(emotional|feeling|sentiment|mood at atmosphere)/i,
-            /^(conflict|tension|drama|relationship|connection)/i,
-            
-            // Subtext/story arc patterns
             /^(subtext|implied|underlying|hidden|meaning)/i,
-            /^(arc|journey|transformation|development|growth)/i,
-            /^(symbolism|metaphor|theme|message|lesson)/i,
-            /^(backstory|history|past|origin=background)/i,
-            /^(motivation|goal|objective|purpose|intention)/i,
-            
-            // Explanatory language
-            /because|since|therefore|thus|however|although/i,
-            /which means|that means|this means|in other words/i,
-            /for example|for instance|such as|like this|similar to/i,
-            /not only|but also|furthermore|additionally|moreover/i,
-            
-            // Camera direction with story context
-            /^(show|reveal|emphasize|highlight|focus on)/i,
-            /^(create|build|establish|develop|maintai)n/i,
-            /^(use this to|use it to|apply this to)/i
+            /^(arc|journey|transformation|development|growth)/i
         ];
         
-        // Skip if matches any unwanted pattern
-        if (unwantedPatterns.some(pattern => pattern.test(cleanLine))) {
+        // Skip only if it matches specific problematic patterns
+        if (problematicPatterns.some(pattern => pattern.test(cleanLine))) {
             continue;
         }
         
-        // Skip lines with too many periods (likely explanations)
-        const periodCount = (cleanLine.match(/\./g) || []).length;
-        if (periodCount > 2 && cleanLine.length > 80) {
-            continue;
-        }
-        
-        // Skip lines that are clearly descriptive rather than directive
-        if (cleanLine.toLowerCase().includes('character') && 
-            (cleanLine.toLowerCase().includes('feels') || 
-             cleanLine.toLowerCase().includes('appears') ||
-             cleanLine.toLowerCase().includes('seems'))) {
+        // Skip lines that are clearly explanations (very long with periods)
+        if (cleanLine.length > 150 && cleanLine.endsWith('.')) {
             continue;
         }
         
@@ -101,22 +63,11 @@ const extractCleanSuggestions = (text: string): string[] => {
             continue;
         }
         
-        // Accept only lines that look like camera/technical directives
-        const technicalIndicators = [
-            'use ', 'apply ', 'employ ', 'utilize ', 'implement ',
-            'frame ', 'position ', 'place ', 'angle ', 'focus ',
-            'lighting', 'camera', 'shot', 'lens', 'aperture', 'depth',
-            'close-up', 'wide', 'medium', 'low-angle', 'high-angle',
-            'tracking', 'pan', 'tilt', 'zoom', 'dolly', 'steadicam'
-        ];
-        
-        if (technicalIndicators.some(indicator => 
-            cleanLine.toLowerCase().includes(indicator))) {
-            suggestions.push(cleanLine);
-        }
+        // Accept the line as a potential suggestion
+        suggestions.push(cleanLine);
     }
     
-    return suggestions.filter(Boolean).slice(0, 5);
+    return suggestions.filter(Boolean).slice(0, 6);
 };
 
 // Initialize GoogleGenAI with the Vite-provided Gemini API key.
@@ -277,16 +228,15 @@ export const getAISuggestions = async (context: string, currentQuestion: string,
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: `CRITICAL: Return ONLY photography/camera advice. No explanations, no story elements, no intro text.
+            contents: `You are a cinematography expert. Provide 3-5 creative suggestions for this question.
 
-For the question: "${currentQuestion}"
+Each suggestion should be a short, actionable response (1-2 sentences) that directly answers the question.
 
-Return exactly 3-5 lines like this example:
-• Use shallow depth of field for intimate close-up
-• Apply low-angle shot to create dominance
-• Employ warm lighting for emotional warmth
+Current question: "${currentQuestion}"
 
-Return only the bullet points, nothing else.`,
+Context: ${enhancedContext}
+
+Provide your suggestions:`,
             config: {
 
             }
@@ -366,18 +316,13 @@ export const getKnowledgeBasedSuggestions = async (
         
         const aiResponse = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: `CRITICAL: Return ONLY camera/photography techniques. No story, no explanations, no intro.
+            contents: `Based on this context, provide 2-3 specific suggestions for: "${currentQuestion}"
 
-For: "${currentQuestion}"
+Focus on actionable, technical suggestions that directly apply the relevant knowledge.
 
-Apply this knowledge: ${enhancedContext}
+Context: ${enhancedContext}
 
-Return only 2-3 technique lines like:
-• Use the 50mm lens for natural perspective
-• Apply rim lighting for separation
-• Employ tracking shot for movement
-
-Return only bullet points, nothing else:`,
+Provide your suggestions:`,
         });
 
         const aiSuggestions = extractCleanSuggestions(aiResponse.text);
