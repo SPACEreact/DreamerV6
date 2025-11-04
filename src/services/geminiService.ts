@@ -311,6 +311,15 @@ export const getKnowledgeBasedSuggestions = async (
                 
                 // Generate knowledge-based suggestions
                 techniques.slice(0, 2).forEach(technique => {
+                    // Simple filter to skip obvious story/writing concepts
+                    if (technique.toLowerCase().includes('subtext') || 
+                        technique.toLowerCase().includes('arc') ||
+                        technique.toLowerCase().includes('story') ||
+                        technique.toLowerCase().includes('dialogue') ||
+                        technique.toLowerCase().includes('character development')) {
+                        return; // Skip this technique
+                    }
+                    
                     const suggestion = `Apply ${technique.toLowerCase()} for enhanced visual impact`;
                     if (!knowledgeSuggestions.includes(suggestion)) {
                         knowledgeSuggestions.push(suggestion);
