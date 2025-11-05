@@ -92,12 +92,11 @@ import { DualProviderAudioGeneration } from './components/DualProviderAudioGener
 import { VisualProgressTracker } from './components/VisualProgressTracker';
 import { StoryIdeation } from './components/StoryIdeation';
 
-import { generateImage, generateNanoImage } from './services/imageGenerationService';
-import { 
-    extractKnowledge, 
-    getAISuggestions, 
-    enhanceShotPrompt, 
-    generateStoryFromIdea, 
+import {
+    extractKnowledge,
+    getAISuggestions,
+    enhanceShotPrompt,
+    generateStoryFromIdea,
     getRandomInspiration,
     generateStoryboard, 
     generateVideoPrompt,
@@ -107,7 +106,9 @@ import {
     generateSmartVisualDescription,
     initializeVisualsFromStoryboardShot,
     makeExplainerPromptCinematic,
-    getKnowledgeBasedSuggestions
+    getKnowledgeBasedSuggestions,
+    generateImage,
+    generateNanoImage
 } from './services/geminiService';
 import { huggingFaceService } from './services/huggingFaceService';
 import { genreIntelligenceService } from './services/genreIntelligenceService';
@@ -1386,6 +1387,7 @@ const StoryboardPage: React.FC<{
     const [enhancingShotIndex, setEnhancingShotIndex] = useState<number | null>(null);
     const [copiedShotIndex, setCopiedShotIndex] = useState<number | null>(null);
     const [showStoryIdeation, setShowStoryIdeation] = useState(false);
+    const [openModelMenu, setOpenModelMenu] = useState<number | null>(null);
     const progressIntervalRef = useRef<number | null>(null);
     
     useEffect(() => {
@@ -1397,16 +1399,12 @@ const StoryboardPage: React.FC<{
         };
     }, []);
 
-    // Close dropdowns when clicking outside
+    // Close AI model dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             const target = event.target as Element;
-            if (!target.closest('[id^="dropdown-"]')) {
-                // Close all dropdowns
-                const dropdowns = document.querySelectorAll('[id^="dropdown-"]');
-                dropdowns.forEach(dropdown => {
-                    dropdown.classList.add('hidden');
-                });
+            if (!target.closest('[data-model-menu]')) {
+                setOpenModelMenu(null);
             }
         };
 
@@ -1548,49 +1546,56 @@ const StoryboardPage: React.FC<{
     const convertToTimeline = async () => {
         if (!storyboard || storyboard.length === 0 || isConverting) return;
         setIsConverting(true);
-    
-        // Create item stubs first to get stable IDs.
-        const items: ShotItem[] = (storyboard || []).filter(shot => shot).map((shot, index) => {
-            const prompt = `Cinematic shot ${index + 1}: ${shot.shotDetails.shotType}. Scene: ${shot.screenplayLine}. Description: ${shot.shotDetails.description}. Camera Angle: ${shot.shotDetails.cameraAngle}. Camera Movement: ${shot.shotDetails.cameraMovement}. Lighting: ${shot.shotDetails.lightingMood}.`;
-            return {
-                id: crypto.randomUUID(),
-                type: 'shot',
-                data: {
-                    shotNumber: index + 1,
-                    prompt: prompt,
-                    originalPrompt: prompt,
-                    description: shot.screenplayLine,
-                    role: shot.shotDetails.shotType,
-                }
-            };
-        });
-    
-        // Fire all visual generation requests in parallel for performance.
-        const visualPromises = (storyboard || []).filter(shot => shot).map(shot => initializeVisualsFromStoryboardShot(shot));
-        const allVisuals = await Promise.all(visualPromises);
-    
-        const newCompositions: Record<string, CompositionData> = {};
-        const newLighting: Record<string, LightingData> = {};
-        const newColor: Record<string, ColorGradingData> = {};
-        const newCamera: Record<string, CameraMovementData> = {};
-    
-        // Map the resolved visual data to the corresponding item IDs.
-        items.forEach((item, index) => {
-            const visuals = allVisuals[index];
-            newCompositions[item.id] = visuals.composition;
-            newLighting[item.id] = visuals.lighting;
-            newColor[item.id] = visuals.color;
-            newCamera[item.id] = visuals.camera;
-        });
-    
-        setCompositions(prev => ({ ...prev, ...newCompositions }));
-        setLightingData(prev => ({ ...prev, ...newLighting }));
-        setColorGradingData(prev => ({ ...prev, ...newColor }));
-        setCameraMovement(prev => ({ ...prev, ...newCamera }));
-        
-        setTimelineItems(items);
-        setIsConverting(false);
-        setStage('final');
+
+        try {
+            // Create item stubs first to get stable IDs.
+            const items: ShotItem[] = (storyboard || []).filter(shot => shot).map((shot, index) => {
+                const prompt = `Cinematic shot ${index + 1}: ${shot.shotDetails.shotType}. Scene: ${shot.screenplayLine}. Description: ${shot.shotDetails.description}. Camera Angle: ${shot.shotDetails.cameraAngle}. Camera Movement: ${shot.shotDetails.cameraMovement}. Lighting: ${shot.shotDetails.lightingMood}.`;
+                return {
+                    id: crypto.randomUUID(),
+                    type: 'shot',
+                    data: {
+                        shotNumber: index + 1,
+                        prompt: prompt,
+                        originalPrompt: prompt,
+                        description: shot.screenplayLine,
+                        role: shot.shotDetails.shotType,
+                    }
+                };
+            });
+
+            // Fire all visual generation requests in parallel for performance.
+            const visualPromises = (storyboard || []).filter(shot => shot).map(shot => initializeVisualsFromStoryboardShot(shot));
+            const allVisuals = await Promise.all(visualPromises);
+
+            const newCompositions: Record<string, CompositionData> = {};
+            const newLighting: Record<string, LightingData> = {};
+            const newColor: Record<string, ColorGradingData> = {};
+            const newCamera: Record<string, CameraMovementData> = {};
+
+            // Map the resolved visual data to the corresponding item IDs.
+            items.forEach((item, index) => {
+                const visuals = allVisuals[index];
+                newCompositions[item.id] = visuals.composition;
+                newLighting[item.id] = visuals.lighting;
+                newColor[item.id] = visuals.color;
+                newCamera[item.id] = visuals.camera;
+            });
+
+            setCompositions(prev => ({ ...prev, ...newCompositions }));
+            setLightingData(prev => ({ ...prev, ...newLighting }));
+            setColorGradingData(prev => ({ ...prev, ...newColor }));
+            setCameraMovement(prev => ({ ...prev, ...newCamera }));
+
+            setTimelineItems(items);
+            setStage('final');
+        } catch (error) {
+            appLogger.error('Failed to populate timeline from storyboard:', error);
+            toast.error('Unable to populate the timeline. Please try again.');
+        } finally {
+            setIsConverting(false);
+            setOpenModelMenu(null);
+        }
     };
 
     const estimatedSeconds = progress ? Math.max(0, Math.round(progress.estimatedMsRemaining / 1000)) : 0;
@@ -1732,193 +1737,382 @@ const StoryboardPage: React.FC<{
                     )}
 
                     {storyboard && storyboard.length > 0 && progress?.status === 'completed' && (
-                        <div className="mt-8">
-                            <h2 className="text-2xl font-semibold mb-4 text-center">Generated Storyboard</h2>
-                            <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
-                                {(storyboard || []).map((shot, index) => {
-                                    // Defensive programming to handle malformed data
-                                    const safeShot = {
-                                        screenplayLine: shot?.screenplayLine || 'No screenplay line provided',
-                                        shotDetails: {
-                                            shotType: shot?.shotDetails?.shotType || 'Unknown Shot Type',
-                                            cameraAngle: shot?.shotDetails?.cameraAngle || 'Standard Angle',
-                                            cameraMovement: shot?.shotDetails?.cameraMovement || 'Static',
-                                            description: shot?.shotDetails?.description || 'No description available',
-                                            lightingMood: shot?.shotDetails?.lightingMood || 'Normal Lighting'
-                                        }
-                                    };
-                                    
-                                    return (
-                                        <div key={index} className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-                                            {/* Screenplay Line */}
-                                            <div className="mb-3">
-                                                <p className="text-xs text-gray-500 mb-1">Shot {index + 1}</p>
-                                                <p className="text-sm font-mono text-gray-400 leading-relaxed">
-                                                    {safeShot.screenplayLine}
-                                                </p>
-                                            </div>
-                                            
-                                            {/* Shot Details */}
-                                            <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
-                                                <div className="grid grid-cols-2 gap-3 text-sm">
-                                                    <div>
-                                                        <p className="text-amber-400 font-medium">Shot Type</p>
-                                                        <p className="text-gray-300">{safeShot.shotDetails.shotType}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-amber-400 font-medium">Camera Angle</p>
-                                                        <p className="text-gray-300">{safeShot.shotDetails.cameraAngle}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-amber-400 font-medium">Camera Movement</p>
-                                                        <p className="text-gray-300">{safeShot.shotDetails.cameraMovement}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-amber-400 font-medium">Lighting Mood</p>
-                                                        <p className="text-gray-300">{safeShot.shotDetails.lightingMood}</p>
-                                                    </div>
-                                                </div>
-                                                
-                                                {/* Description - Full width */}
-                                                <div className="pt-2 border-t border-gray-700">
-                                                    <p className="text-amber-400 font-medium mb-1">Description</p>
-                                                    <p className="text-gray-300 text-sm leading-relaxed">{safeShot.shotDetails.description}</p>
-                                                </div>
-                                            </div>
-                                    
-                                            {/* Copy Prompt Buttons */}
-                                            <div className="mt-3 flex justify-between items-center gap-2">
-                                                {/* Original Copy Prompt Button - Kept Intact */}
-                                                <motion.button 
-                                                    whileHover={{ scale: 1.02 }} 
-                                                    whileTap={{ scale: 0.98 }}
-                                                    onClick={() => {
-                                                        const promptText = `${safeShot.shotDetails.shotType} ${safeShot.shotDetails.cameraAngle}. ${safeShot.shotDetails.description}. ${safeShot.shotDetails.lightingMood} lighting. ${safeShot.shotDetails.cameraMovement} camera movement.`;
-                                                        navigator.clipboard.writeText(promptText).then(() => {
-                                                            setCopiedShotIndex(index);
-                                                            setTimeout(() => setCopiedShotIndex(null), 2000);
-                                                        });
-                                                    }}
-                                                    className="px-3 py-1 text-xs rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 flex items-center space-x-1"
-                                                >
-                                                    {copiedShotIndex === index ? (
-                                                        <>
-                                                            <Check className="w-3 h-3" />
-                                                            <span>Copied!</span>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <ClipboardCopy className="w-3 h-3" />
-                                                            <span>Copy Prompt</span>
-                                                        </>
-                                                    )}
-                                                </motion.button>
+                        <div className="mt-10 space-y-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="bg-gray-900/70 border border-gray-800/70 rounded-2xl p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-xl shadow-black/20"
+                            >
+                                <div>
+                                    <p className="text-xs uppercase tracking-widest text-amber-400">Storyboard Ready</p>
+                                    <h2 className="text-2xl font-semibold text-white mt-2">Generated Storyboard</h2>
+                                    <p className="text-sm text-gray-400 mt-1">
+                                        {storyboard.length} cinematic shots crafted with {storyboardStyle === 'explainer' ? 'explainer-friendly clarity' : 'cinematic mood'}.
+                                    </p>
+                                </div>
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={convertToTimeline}
+                                    disabled={!storyboard || storyboard.length === 0 || isConverting}
+                                    className="w-full md:w-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-black font-semibold rounded-xl disabled:opacity-50 flex items-center justify-center space-x-2 shadow-lg shadow-amber-500/30"
+                                >
+                                    {isConverting ? (
+                                        <>
+                                            <div className="w-5 h-5 animate-spin rounded-full border-2 border-black/20 border-t-black" />
+                                            <span>Populating Timeline...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="w-4 h-4" />
+                                            <span>Populate Timeline</span>
+                                        </>
+                                    )}
+                                </motion.button>
+                            </motion.div>
 
-                                                {/* Multi-Model Copy Dropdown */}
-                                                <div className="relative">
-                                                    <motion.button 
-                                                        whileHover={{ scale: 1.02 }} 
+                            <div className="relative">
+                                {isConverting && (
+                                    <div className="absolute inset-0 z-10 rounded-2xl bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-3 text-amber-300">
+                                        <div className="w-8 h-8 animate-spin rounded-full border-3 border-amber-400/40 border-t-amber-300" />
+                                        <p className="text-sm">Building your visual timeline...</p>
+                                    </div>
+                                )}
+                                <div className={`grid gap-4 md:grid-cols-2 xl:grid-cols-3 max-h-[55vh] overflow-y-auto pr-1 ${isConverting ? 'pointer-events-none blur-[1px]' : ''}`}>
+                                    {(storyboard || []).map((shot, index) => {
+                                        const safeShot = {
+                                            screenplayLine: shot?.screenplayLine || 'No screenplay line provided',
+                                            shotDetails: {
+                                                shotType: shot?.shotDetails?.shotType || 'Unknown Shot Type',
+                                                cameraAngle: shot?.shotDetails?.cameraAngle || 'Standard Angle',
+                                                cameraMovement: shot?.shotDetails?.cameraMovement || 'Static',
+                                                description: shot?.shotDetails?.description || 'No description available',
+                                                lightingMood: shot?.shotDetails?.lightingMood || 'Normal Lighting'
+                                            }
+                                        };
+
+                                        const promptText = `${safeShot.shotDetails.shotType} ${safeShot.shotDetails.cameraAngle}. ${safeShot.shotDetails.description}. ${safeShot.shotDetails.lightingMood} lighting. ${safeShot.shotDetails.cameraMovement} camera movement.`;
+
+                                        return (
+                                            <motion.div
+                                                key={index}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: index * 0.03 }}
+                                                className="relative overflow-hidden rounded-2xl border border-gray-800/60 bg-gradient-to-br from-gray-900/80 via-gray-900/60 to-gray-900/30 p-5 shadow-lg shadow-black/20"
+                                            >
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div>
+                                                        <span className="text-xs uppercase tracking-wider text-amber-400">Shot {index + 1}</span>
+                                                        <h3 className="text-lg font-semibold text-white mt-1">{safeShot.shotDetails.shotType}</h3>
+                                                    </div>
+                                                    <div className="text-right space-y-1">
+                                                        <p className="text-[10px] uppercase tracking-widest text-gray-500">Camera Angle</p>
+                                                        <p className="text-sm text-gray-200">{safeShot.shotDetails.cameraAngle}</p>
+                                                        <p className="text-[10px] uppercase tracking-widest text-gray-500">Movement</p>
+                                                        <p className="text-sm text-gray-200">{safeShot.shotDetails.cameraMovement}</p>
+                                                    </div>
+                                                </div>
+                                                <p className="mt-3 text-sm text-amber-200/90 font-mono leading-relaxed">{safeShot.screenplayLine}</p>
+                                                <p className="mt-3 text-sm text-gray-300 leading-relaxed">{safeShot.shotDetails.description}</p>
+
+                                                <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-gray-300">
+                                                    <div className="p-3 rounded-xl bg-gray-900/60 border border-gray-800/70">
+                                                        <p className="text-[10px] uppercase tracking-widest text-gray-500">Lighting Mood</p>
+                                                        <p className="text-sm text-white mt-1">{safeShot.shotDetails.lightingMood}</p>
+                                                    </div>
+                                                    <div className="p-3 rounded-xl bg-gray-900/60 border border-gray-800/70">
+                                                        <p className="text-[10px] uppercase tracking-widest text-gray-500">Scene Energy</p>
+                                                        <p className="text-sm text-white mt-1">{safeShot.shotDetails.cameraMovement}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 flex flex-wrap items-center gap-2">
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.02 }}
                                                         whileTap={{ scale: 0.98 }}
-                                                        onClick={() => {
-                                                            const dropdownId = `dropdown-${index}`;
-                                                            const dropdown = document.getElementById(dropdownId);
-                                                            if (dropdown) {
-                                                                dropdown.classList.toggle('hidden');
+                                                        onClick={async () => {
+                                                            try {
+                                                                await navigator.clipboard.writeText(promptText);
+                                                                setCopiedShotIndex(index);
+                                                                toast.success('Shot prompt copied!');
+                                                                setTimeout(() => setCopiedShotIndex(null), 2000);
+                                                            } catch (error) {
+                                                                toast.error('Failed to copy prompt.');
                                                             }
                                                         }}
-                                                        className="px-3 py-1 text-xs rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/40 hover:bg-blue-500/30 flex items-center space-x-1"
+                                                        className={`px-3 py-1.5 text-xs rounded-lg border flex items-center space-x-1 transition-colors ${copiedShotIndex === index ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-200 hover:bg-amber-500/20'}`}
                                                     >
-                                                        <ExternalLink className="w-3 h-3" />
-                                                        <span>AI Models</span>
-                                                        <ChevronDown className="w-3 h-3" />
-                                                    </motion.button>
-                                                    
-                                                    {/* Dropdown Menu */}
-                                                    <div id={`dropdown-${index}`} className="hidden absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
-                                                        <div className="p-2 border-b border-gray-600">
-                                                            <p className="text-xs text-gray-300 font-medium">Copy for AI Image Generation</p>
-                                                        </div>
-                                                        {(AI_MODELS || []).filter(model => model).map((model) => (
-                                                            <motion.button
-                                                                key={model.id}
-                                                                whileHover={{ backgroundColor: 'rgba(55, 65, 81, 0.5)' }}
-                                                                onClick={async () => {
-                                                                    try {
-                                                                        const formattedPrompt = formatPromptForModel(safeShot, model);
-                                                                        await navigator.clipboard.writeText(formattedPrompt);
-                                                                        toast.success(`Copied prompt for ${model.name}!`);
-                                                                    } catch (error) {
-
-                                                                        toast.error('Failed to copy prompt. Please try again.');
-                                                                    }
-                                                                    
-                                                                    // Close dropdown
-                                                                    const dropdown = document.getElementById(`dropdown-${index}`);
-                                                                    if (dropdown) {
-                                                                        dropdown.classList.add('hidden');
-                                                                    }
-                                                                }}
-                                                                id={`model-btn-${index}-${model.id}`}
-                                                                className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-gray-700 flex items-center justify-between group"
-                                                            >
-                                                                <div className="flex-1">
-                                                                    <div className="flex items-center space-x-2">
-                                                                        <span className="font-medium text-white">{model.name}</span>
-                                                                        <ExternalLink className="w-3 h-3 text-gray-400 group-hover:text-gray-300" />
-                                                                    </div>
-                                                                    <p className="text-xs text-gray-400 mt-1">{model.description}</p>
-                                                                    {model.website && (
-                                                                        <p className="text-xs text-blue-400 mt-1">{model.website}</p>
-                                                                    )}
-                                                                </div>
-                                                            </motion.button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                
-                                                {storyboardStyle === 'explainer' && (
-                                                    <motion.button 
-                                                        whileHover={{ scale: 1.05 }} 
-                                                        whileTap={{ scale: 0.95 }}
-                                                        onClick={() => handleMakeCinematic(safeShot, index)}
-                                                        disabled={enhancingShotIndex === index}
-                                                        className="px-3 py-1 text-xs rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-500/30 disabled:opacity-50 flex items-center space-x-2"
-                                                    >
-                                                        {enhancingShotIndex === index ? (
+                                                        {copiedShotIndex === index ? (
                                                             <>
-                                                                <div className="w-3 h-3 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-400" />
-                                                                <span>Enhancing...</span>
+                                                                <Check className="w-3 h-3" />
+                                                                <span>Copied!</span>
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <Film className="w-3 h-3" />
-                                                                <span>Make Cinematic</span>
+                                                                <ClipboardCopy className="w-3 h-3" />
+                                                                <span>Copy Prompt</span>
                                                             </>
                                                         )}
                                                     </motion.button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            
-                            {/* Continue to Timeline Button */}
-                            <div className="mt-6 flex justify-center">
-                                <motion.button 
-                                    onClick={convertToTimeline} 
-                                    disabled={!storyboard || storyboard.length === 0 || isConverting} 
-                                    className="px-8 py-4 text-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold rounded-lg disabled:opacity-50 flex items-center justify-center space-x-2 hover:from-amber-600 hover:to-orange-700 transition-all"
-                                >
-                                     {isConverting ? ( 
-                                         <><div className="w-5 h-5 animate-spin rounded-full border-2 border-gray-300 border-t-white" /><span>Initializing Visuals...</span></> 
-                                     ) : ( 
-                                         'Continue to Visual Editor' 
-                                     )}
-                                </motion.button>
+
+                                                    <div className="relative" data-model-menu>
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.02 }}
+                                                            whileTap={{ scale: 0.98 }}
+                                                            onClick={() => setOpenModelMenu(prev => (prev === index ? null : index))}
+                                                            className="px-3 py-1.5 text-xs rounded-lg bg-blue-500/15 border border-blue-500/40 text-blue-200 hover:bg-blue-500/25 flex items-center space-x-1"
+                                                        >
+                                                            <ExternalLink className="w-3 h-3" />
+                                                            <span>AI Formats</span>
+                                                            <ChevronDown className={`w-3 h-3 transition-transform ${openModelMenu === index ? 'rotate-180' : ''}`} />
+                                                        </motion.button>
+                                                        <AnimatePresence>
+                                                            {openModelMenu === index && (
+                                                                <motion.div
+                                                                    initial={{ opacity: 0, y: 6 }}
+                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                    exit={{ opacity: 0, y: 6 }}
+                                                                    transition={{ duration: 0.18 }}
+                                                                    className="absolute right-0 top-full mt-2 w-64 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden"
+                                                                    data-model-menu
+                                                                >
+                                                                    <div className="px-4 py-3 border-b border-gray-800/80">
+                                                                        <p className="text-xs font-medium text-gray-300">Copy prompt formatted for AI image tools</p>
+                                                                    </div>
+                                                                    <div className="max-h-64 overflow-y-auto divide-y divide-gray-800/60">
+                                                                        {(AI_MODELS || []).filter(model => model).map(model => (
+                                                                            <button
+                                                                                key={model.id}
+                                                                                onClick={async () => {
+                                                                                    try {
+                                                                                        const formattedPrompt = formatPromptForModel(safeShot, model);
+                                                                                        await navigator.clipboard.writeText(formattedPrompt);
+                                                                                        toast.success(`Copied prompt for ${model.name}!`);
+                                                                                        setOpenModelMenu(null);
+                                                                                    } catch (error) {
+                                                                                        toast.error('Failed to copy prompt. Please try again.');
+                                                                                    }
+                                                                                }}
+                                                                                className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-gray-800/80 transition-colors flex items-start justify-between gap-3"
+                                                                            >
+                                                                                <div className="space-y-1">
+                                                                                    <p className="font-medium text-white">{model.name}</p>
+                                                                                    <p className="text-xs text-gray-400">{model.description}</p>
+                                                                                    {model.website && <p className="text-[11px] text-blue-400">{model.website}</p>}
+                                                                                </div>
+                                                                                <Copy className="w-4 h-4 text-gray-500" />
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
+                                                    </div>
+
+                                                    {storyboardStyle === 'explainer' && (
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.02 }}
+                                                            whileTap={{ scale: 0.98 }}
+                                                            onClick={() => handleMakeCinematic(safeShot, index)}
+                                                            disabled={enhancingShotIndex === index}
+                                                            className="px-3 py-1.5 text-xs rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/25 flex items-center space-x-2 disabled:opacity-50"
+                                                        >
+                                                            {enhancingShotIndex === index ? (
+                                                                <>
+                                                                    <div className="w-3 h-3 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-400" />
+                                                                    <span>Enhancing...</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Film className="w-3 h-3" />
+                                                                    <span>Make Cinematic</span>
+                                                                </>
+                                                            )}
+                                                        </motion.button>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                     )}
+
+                                </motion.button>
+                            </motion.div>
+
+                            <div className="relative">
+                                {isConverting && (
+                                    <div className="absolute inset-0 z-10 rounded-2xl bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-3 text-amber-300">
+                                        <div className="w-8 h-8 animate-spin rounded-full border-3 border-amber-400/40 border-t-amber-300" />
+                                        <p className="text-sm">Building your visual timeline...</p>
+                                    </div>
+                                )}
+                                <div className={`grid gap-4 md:grid-cols-2 xl:grid-cols-3 max-h-[55vh] overflow-y-auto pr-1 ${isConverting ? 'pointer-events-none blur-[1px]' : ''}`}>
+                                    {(storyboard || []).map((shot, index) => {
+                                        const safeShot = {
+                                            screenplayLine: shot?.screenplayLine || 'No screenplay line provided',
+                                            shotDetails: {
+                                                shotType: shot?.shotDetails?.shotType || 'Unknown Shot Type',
+                                                cameraAngle: shot?.shotDetails?.cameraAngle || 'Standard Angle',
+                                                cameraMovement: shot?.shotDetails?.cameraMovement || 'Static',
+                                                description: shot?.shotDetails?.description || 'No description available',
+                                                lightingMood: shot?.shotDetails?.lightingMood || 'Normal Lighting'
+                                            }
+                                        };
+
+                                        const promptText = `${safeShot.shotDetails.shotType} ${safeShot.shotDetails.cameraAngle}. ${safeShot.shotDetails.description}. ${safeShot.shotDetails.lightingMood} lighting. ${safeShot.shotDetails.cameraMovement} camera movement.`;
+
+                                        return (
+                                            <motion.div
+                                                key={index}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: index * 0.03 }}
+                                                className="relative overflow-hidden rounded-2xl border border-gray-800/60 bg-gradient-to-br from-gray-900/80 via-gray-900/60 to-gray-900/30 p-5 shadow-lg shadow-black/20"
+                                            >
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div>
+                                                        <span className="text-xs uppercase tracking-wider text-amber-400">Shot {index + 1}</span>
+                                                        <h3 className="text-lg font-semibold text-white mt-1">{safeShot.shotDetails.shotType}</h3>
+                                                    </div>
+                                                    <div className="text-right space-y-1">
+                                                        <p className="text-[10px] uppercase tracking-widest text-gray-500">Camera Angle</p>
+                                                        <p className="text-sm text-gray-200">{safeShot.shotDetails.cameraAngle}</p>
+                                                        <p className="text-[10px] uppercase tracking-widest text-gray-500">Movement</p>
+                                                        <p className="text-sm text-gray-200">{safeShot.shotDetails.cameraMovement}</p>
+                                                    </div>
+                                                </div>
+                                                <p className="mt-3 text-sm text-amber-200/90 font-mono leading-relaxed">{safeShot.screenplayLine}</p>
+                                                <p className="mt-3 text-sm text-gray-300 leading-relaxed">{safeShot.shotDetails.description}</p>
+
+                                                <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-gray-300">
+                                                    <div className="p-3 rounded-xl bg-gray-900/60 border border-gray-800/70">
+                                                        <p className="text-[10px] uppercase tracking-widest text-gray-500">Lighting Mood</p>
+                                                        <p className="text-sm text-white mt-1">{safeShot.shotDetails.lightingMood}</p>
+                                                    </div>
+                                                    <div className="p-3 rounded-xl bg-gray-900/60 border border-gray-800/70">
+                                                        <p className="text-[10px] uppercase tracking-widest text-gray-500">Scene Energy</p>
+                                                        <p className="text-sm text-white mt-1">{safeShot.shotDetails.cameraMovement}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 flex flex-wrap items-center gap-2">
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.02 }}
+                                                        whileTap={{ scale: 0.98 }}
+                                                        onClick={async () => {
+                                                            try {
+                                                                await navigator.clipboard.writeText(promptText);
+                                                                setCopiedShotIndex(index);
+                                                                toast.success('Shot prompt copied!');
+                                                                setTimeout(() => setCopiedShotIndex(null), 2000);
+                                                            } catch (error) {
+                                                                toast.error('Failed to copy prompt.');
+                                                            }
+                                                        }}
+                                                        className={`px-3 py-1.5 text-xs rounded-lg border flex items-center space-x-1 transition-colors ${copiedShotIndex === index ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300' : 'bg-amber-500/10 border-amber-500/30 text-amber-200 hover:bg-amber-500/20'}`}
+                                                    >
+                                                        {copiedShotIndex === index ? (
+                                                            <>
+                                                                <Check className="w-3 h-3" />
+                                                                <span>Copied!</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <ClipboardCopy className="w-3 h-3" />
+                                                                <span>Copy Prompt</span>
+                                                            </>
+                                                        )}
+                                                    </motion.button>
+
+                                                    <div className="relative" data-model-menu>
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.02 }}
+                                                            whileTap={{ scale: 0.98 }}
+                                                            onClick={() => setOpenModelMenu(prev => (prev === index ? null : index))}
+                                                            className="px-3 py-1.5 text-xs rounded-lg bg-blue-500/15 border border-blue-500/40 text-blue-200 hover:bg-blue-500/25 flex items-center space-x-1"
+                                                        >
+                                                            <ExternalLink className="w-3 h-3" />
+                                                            <span>AI Formats</span>
+                                                            <ChevronDown className={`w-3 h-3 transition-transform ${openModelMenu === index ? 'rotate-180' : ''}`} />
+                                                        </motion.button>
+                                                        <AnimatePresence>
+                                                            {openModelMenu === index && (
+                                                                <motion.div
+                                                                    initial={{ opacity: 0, y: 6 }}
+                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                    exit={{ opacity: 0, y: 6 }}
+                                                                    transition={{ duration: 0.18 }}
+                                                                    className="absolute right-0 top-full mt-2 w-64 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden"
+                                                                    data-model-menu
+                                                                >
+                                                                    <div className="px-4 py-3 border-b border-gray-800/80">
+                                                                        <p className="text-xs font-medium text-gray-300">Copy prompt formatted for AI image tools</p>
+                                                                    </div>
+                                                                    <div className="max-h-64 overflow-y-auto divide-y divide-gray-800/60">
+                                                                        {(AI_MODELS || []).filter(model => model).map(model => (
+                                                                            <button
+                                                                                key={model.id}
+                                                                                onClick={async () => {
+                                                                                    try {
+                                                                                        const formattedPrompt = formatPromptForModel(safeShot, model);
+                                                                                        await navigator.clipboard.writeText(formattedPrompt);
+                                                                                        toast.success(`Copied prompt for ${model.name}!`);
+                                                                                        setOpenModelMenu(null);
+                                                                                    } catch (error) {
+                                                                                        toast.error('Failed to copy prompt. Please try again.');
+                                                                                    }
+                                                                                }}
+                                                                                className="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-gray-800/80 transition-colors flex items-start justify-between gap-3"
+                                                                            >
+                                                                                <div className="space-y-1">
+                                                                                    <p className="font-medium text-white">{model.name}</p>
+                                                                                    <p className="text-xs text-gray-400">{model.description}</p>
+                                                                                    {model.website && <p className="text-[11px] text-blue-400">{model.website}</p>}
+                                                                                </div>
+                                                                                <Copy className="w-4 h-4 text-gray-500" />
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
+                                                    </div>
+
+                                                    {storyboardStyle === 'explainer' && (
+                                                        <motion.button
+                                                            whileHover={{ scale: 1.02 }}
+                                                            whileTap={{ scale: 0.98 }}
+                                                            onClick={() => handleMakeCinematic(safeShot, index)}
+                                                            disabled={enhancingShotIndex === index}
+                                                            className="px-3 py-1.5 text-xs rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/25 flex items-center space-x-2 disabled:opacity-50"
+                                                        >
+                                                            {enhancingShotIndex === index ? (
+                                                                <>
+                                                                    <div className="w-3 h-3 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-400" />
+                                                                    <span>Enhancing...</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Film className="w-3 h-3" />
+                                                                    <span>Make Cinematic</span>
+                                                                </>
+                                                            )}
+                                                        </motion.button>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                                                </motion.button>
+
                 </motion.div>
             </div>
 
@@ -2015,6 +2209,7 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
     const [isUpdatingPrompt, setIsUpdatingPrompt] = useState(false);
     const [copiedModel, setCopiedModel] = useState<string | null>(null);
     const [showCopyMenu, setShowCopyMenu] = useState(false);
+    const [copiedPromptType, setCopiedPromptType] = useState<'current' | 'original' | null>(null);
 
     const handleUpdatePromptFromVisuals = async () => {
         setIsUpdatingPrompt(true);
@@ -2070,6 +2265,24 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
         updateVisuals(item.id, 'cameraMovement', { ...visualData.camera, [key]: { ...current, [coord]: value } });
     };
 
+    const handleCopyShotPrompt = async (type: 'current' | 'original') => {
+        const text = type === 'current' ? shotData.prompt : shotData.originalPrompt;
+        if (!text) {
+            toast.error('No prompt available to copy.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedPromptType(type);
+            toast.success(type === 'current' ? 'Current prompt copied!' : 'Original prompt copied!');
+            setTimeout(() => setCopiedPromptType(null), 2000);
+        } catch (error) {
+            appLogger.error('Failed to copy shot prompt:', error);
+            toast.error('Failed to copy prompt. Please try again.');
+        }
+    };
+
     const visualData = {
         composition: compositions[item.id] || defaultComposition,
         lighting: lightingData[item.id] || defaultLighting,
@@ -2098,60 +2311,83 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
                 {/* Prompt Text Area */}
                 <div className="space-y-4 flex flex-col">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <h3 className="text-base md:text-lg font-semibold text-gray-300">Cinematic Prompt</h3>
-                        {/* Copy Prompt Dropdown */}
-                        <div className="relative">
+                        <div className="flex items-center gap-2">
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
-                                onClick={() => setShowCopyMenu(!showCopyMenu)}
-                                className="flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-amber-400 rounded-lg transition-colors text-sm"
-                                title="Copy prompt for AI models"
+                                onClick={() => handleCopyShotPrompt('current')}
+                                className={`flex items-center space-x-2 px-3 py-2 rounded-lg border text-xs sm:text-sm transition-colors ${copiedPromptType === 'current' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200' : 'bg-gray-900/70 border-gray-700 text-amber-300 hover:bg-gray-800'}`}
+                                title="Copy the edited prompt"
                             >
-                                <ClipboardCopy className="w-4 h-4" />
-                                <span className="hidden sm:inline">Copy For AI</span>
-                                <ChevronDown className={`w-3 h-3 transition-transform ${showCopyMenu ? 'rotate-180' : ''}`} />
+                                {copiedPromptType === 'current' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                <span className="hidden sm:inline">Copy Current</span>
+                                <span className="sm:hidden">Current</span>
                             </motion.button>
-                            <AnimatePresence>
-                                {showCopyMenu && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -10 }}
-                                        className="absolute right-0 mt-2 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <div className="p-2 border-b border-gray-800">
-                                            <p className="text-xs text-gray-400 px-2 py-1">Copy prompt formatted for:</p>
-                                        </div>
-                                        <div className="p-2 space-y-1">
-                                            {(AI_MODELS || []).filter(model => model).map(model => (
-                                                <button
-                                                    key={model.id}
-                                                    onClick={() => {
-                                                        handleCopyPromptForModel(model, shotItem);
-                                                        setShowCopyMenu(false);
-                                                    }}
-                                                    className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-800 rounded-lg transition-colors group"
-                                                >
-                                                    <div className="flex-grow text-left">
-                                                        <p className="text-sm font-medium text-white">{model.name}</p>
-                                                        <p className="text-xs text-gray-400">{model.description}</p>
-                                                    </div>
-                                                    {copiedModel === model.id ? (
-                                                        <Check className="w-4 h-4 text-green-400 flex-shrink-0 ml-2" />
-                                                    ) : model.website ? (
-                                                        <ExternalLink className="w-3 h-3 text-gray-600 group-hover:text-amber-400 flex-shrink-0 ml-2" />
-                                                    ) : (
-                                                        <Copy className="w-3 h-3 text-gray-600 group-hover:text-amber-400 flex-shrink-0 ml-2" />
-                                                    )}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => handleCopyShotPrompt('original')}
+                                className={`flex items-center space-x-2 px-3 py-2 rounded-lg border text-xs sm:text-sm transition-colors ${copiedPromptType === 'original' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200' : 'bg-gray-900/40 border-gray-700 text-gray-200 hover:bg-gray-800'}`}
+                                title="Copy the original prompt"
+                            >
+                                {copiedPromptType === 'original' ? <Check className="w-4 h-4" /> : <ClipboardCopy className="w-4 h-4" />}
+                                <span className="hidden sm:inline">Copy Original</span>
+                                <span className="sm:hidden">Original</span>
+                            </motion.button>
+                            <div className="relative">
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => setShowCopyMenu(!showCopyMenu)}
+                                    className="flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 text-amber-400 rounded-lg transition-colors text-sm"
+                                    title="Copy prompt for AI models"
+                                >
+                                    <ClipboardCopy className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Copy For AI</span>
+                                    <ChevronDown className={`w-3 h-3 transition-transform ${showCopyMenu ? 'rotate-180' : ''}`} />
+                                </motion.button>
+                                <AnimatePresence>
+                                    {showCopyMenu && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className="absolute right-0 mt-2 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <div className="p-2 border-b border-gray-800">
+                                                <p className="text-xs text-gray-400 px-2 py-1">Copy prompt formatted for:</p>
+                                            </div>
+                                            <div className="p-2 space-y-1">
+                                                {(AI_MODELS || []).filter(model => model).map(model => (
+                                                    <button
+                                                        key={model.id}
+                                                        onClick={() => {
+                                                            handleCopyPromptForModel(model, shotItem);
+                                                            setShowCopyMenu(false);
+                                                        }}
+                                                        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-800 rounded-lg transition-colors group"
+                                                    >
+                                                        <div className="flex-grow text-left">
+                                                            <p className="text-sm font-medium text-white">{model.name}</p>
+                                                            <p className="text-xs text-gray-400">{model.description}</p>
+                                                        </div>
+                                                        {copiedModel === model.id ? (
+                                                            <Check className="w-4 h-4 text-green-400 flex-shrink-0 ml-2" />
+                                                        ) : model.website ? (
+                                                            <ExternalLink className="w-3 h-3 text-gray-600 group-hover:text-amber-400 flex-shrink-0 ml-2" />
+                                                        ) : (
+                                                            <Copy className="w-3 h-3 text-gray-600 group-hover:text-amber-400 flex-shrink-0 ml-2" />
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
                         </div>
                     </div>
                     <textarea 
@@ -2593,7 +2829,6 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
         setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'loading'}}));
         try {
             const promptForGeneration = style === 'explainer' ? item.data.description : item.data.prompt;
-            const imageGenerator = type === 'photoreal' ? generateImage : generateNanoImage;
             const currentAspectRatio = aspectRatios[id] || '16:9';
 
             let b64: string;
