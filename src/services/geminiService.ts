@@ -9,6 +9,81 @@ import { geminiLogger } from '../lib/logger';
 import { handleAIServiceError, sanitizeErrorMessage } from '../lib/errorHandler';
 import { API_CONFIG, NUMERIC } from '../constants';
 
+// Helper keywords to keep Dreamer Insight focused on cinematography rather than story beats
+const CINEMATOGRAPHY_KEYWORDS = [
+    'camera', 'shot', 'frame', 'lighting', 'light', 'lens', 'composition', 'color', 'grading',
+    'angle', 'movement', 'blocking', 'depth', 'exposure', 'focus', 'silhouette', 'shadow', 'contrast',
+    'visual', 'cinematic', 'cinematography', 'framing', 'gobo', 'practical', 'aperture', 'pan', 'tilt', 'dolly', 'zoom',
+    'rack focus', 'wide', 'close-up', 'b-roll'
+];
+
+const NARRATIVE_BLOCKLIST = [
+    'protagonist', 'antagonist', 'character arc', 'character', 'journey', 'plot', 'story',
+    'narrative', 'theme', 'stakes', 'motivation', 'goal', 'desire', 'conflict', 'backstory',
+    'dialogue', 'beat', 'twist', 'act', 'scene arc', 'story arc', 'emotional arc', 'relationship'
+];
+
+const filterCinematographySuggestions = (suggestions: string[]): string[] => {
+    return suggestions.filter(suggestion => {
+        const lower = suggestion.toLowerCase();
+        if (NARRATIVE_BLOCKLIST.some(term => lower.includes(term))) {
+            return false;
+        }
+        return CINEMATOGRAPHY_KEYWORDS.some(keyword => lower.includes(keyword));
+    });
+};
+
+const DEFAULT_CINEMATOGRAPHY_SUGGESTIONS = [
+    'Lock a 35mm lens at eye level and dolly in slowly to let the performance swell into the frame.',
+    'Motivate the key light from a practical source, then feather a soft fill to retain texture in the shadows.',
+    'Stage the action in foreground, midground, and background layers so the blocking paints depth through the shot.',
+    'Float the camera on a controlled handheld sway to translate the emotional turbulence into motion.',
+    'Balance warm key light with a cool rim to sculpt silhouettes and echo the scene\'s tonal contrast.'
+];
+
+const enforceCinematographyFocus = async (
+    rawSuggestions: string[],
+    context: string,
+    currentQuestion: string
+): Promise<string[]> => {
+    const alreadyFocused = filterCinematographySuggestions(rawSuggestions);
+    if (alreadyFocused.length > 0) {
+        return alreadyFocused.slice(0, 5);
+    }
+
+    if (rawSuggestions.length > 0) {
+        try {
+            const formattedList = rawSuggestions
+                .map((suggestion, index) => `${index + 1}. ${suggestion}`)
+                .join('\n');
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.0-flash-exp',
+                contents: `These suggestions drift into narrative ideation. Rewrite each one as a cinematography-specific directive focused on camera, lensing, lighting, composition, or blocking.
+
+Question: "${currentQuestion}"
+
+Context:
+${context}
+
+Original suggestions:
+${formattedList}
+
+Return 3-5 bullet points that each stay strictly within cinematography craft and avoid plot or character development.`,
+            });
+
+            const refocused = filterCinematographySuggestions(extractCleanSuggestions(response.text));
+            if (refocused.length > 0) {
+                return refocused.slice(0, 5);
+            }
+        } catch (refocusError) {
+            geminiLogger.warn('Unable to refocus suggestions on cinematography:', sanitizeErrorMessage(refocusError));
+        }
+    }
+
+    return DEFAULT_CINEMATOGRAPHY_SUGGESTIONS.slice(0, 5);
+};
+
 // Helper function to extract clean suggestions - balanced filtering
 const extractCleanSuggestions = (text: string): string[] => {
     const lines = text.split('\n')
@@ -223,21 +298,21 @@ export const getAISuggestions = async (context: string, currentQuestion: string,
         // Use HuggingFace for local analysis to enhance context
         await huggingFaceService.initialize();
         const narrativeAnalysis = await huggingFaceService.analyzeNarrative(context);
-        
+
         // Enhance context with HuggingFace analysis
         const enhancedContext = `${context}\n\nNARRATIVE ANALYSIS (Local AI):\nGenre: ${narrativeAnalysis.genre}\nEmotional Tone: ${narrativeAnalysis.emotionalTone}\nVisual Cues: ${narrativeAnalysis.visualCues.join(', ')}\nNarrative Elements: ${narrativeAnalysis.narrativeElements.join(', ')}`;
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: `You are a cinematography expert. Provide 3-5 specific, practical suggestions for this question.
+            contents: `You are a cinematography mentor helping a director of photography make visual decisions.
 
-Focus on technical cinematography aspects: camera work, lighting setups, composition techniques, framing methods, lens choices, visual aesthetics, and filming approaches. Each suggestion should directly address the question with actionable advice.
+Provide 3-5 concise suggestions that stay strictly focused on cinematic execution: camera placement, lensing, movement, lighting design, color treatment, composition, blocking, or shot rhythm. Avoid any plot ideas, character arcs, dialogue notes, or general storytelling advice.
 
 Current question: "${currentQuestion}"
 
 Context: ${enhancedContext}
 
-Provide your cinematography suggestions:`,
+Respond with cinematography suggestions only:`,
             config: {
 
             }
@@ -245,7 +320,7 @@ Provide your cinematography suggestions:`,
 
         const suggestionsText = response.text;
         const suggestions = extractCleanSuggestions(suggestionsText);
-        return suggestions;
+        return await enforceCinematographyFocus(suggestions, enhancedContext, currentQuestion);
     } catch (error) {
         handleAIServiceError(error, 'Get AI Suggestions');
         return [];
@@ -304,24 +379,19 @@ export const getKnowledgeBasedSuggestions = async (
                 
                 // Generate knowledge-based suggestions
                 techniques.slice(0, 2).forEach(technique => {
-                    // Very targeted filter to skip only clear narrative/writing concepts
                     const narrativeTerms = [
-                        'subtext', 'arc', 'story', 'dialogue', 'character development', 
-                        'scene arc', 'narrative', 'plot', 'hero', 'quest', 'adventure',
-                        'stakes', 'psychology', 'writing', 'script', 'screenplay',
-                        'theme', 'thematic', 'symbolic', 'metaphor',
-                        'backstory', 'exposition', 'prologue', 'epilogue', 'chapter',
-                        'challenge', 'obstacle', 'goal', 'desire', 'want', 'need',
-                        'motivation', 'drive', 'growth', 'evolution', 'relationship',
-                        'transformation', 'journey'
+                        ...NARRATIVE_BLOCKLIST,
+                        'subtext', 'dialogue', 'character development', 'scene arc', 'screenplay',
+                        'metaphor', 'exposition', 'prologue', 'epilogue', 'chapter', 'obstacle',
+                        'growth', 'evolution', 'transformation'
                     ];
-                    
+
                     const techniqueLower = technique.toLowerCase();
                     if (narrativeTerms.some(term => techniqueLower.includes(term))) {
                         return; // Skip this technique
                     }
-                    
-                    const suggestion = `Apply ${technique.toLowerCase()} for enhanced visual impact`;
+
+                    const suggestion = `Apply ${technique.toLowerCase()} to elevate the visuals`;
                     if (!knowledgeSuggestions.includes(suggestion)) {
                         knowledgeSuggestions.push(suggestion);
                     }
@@ -334,22 +404,27 @@ export const getKnowledgeBasedSuggestions = async (
         
         const aiResponse = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: `Based on this context, provide 2-3 specific visual concepts for: "${currentQuestion}"
+            contents: `Based on this context, provide 2-3 cinematography-forward ideas for: "${currentQuestion}"
 
-Focus on creative visual storytelling ideas and visual concepts (not technical advice). Think about specific visual scenarios, atmospheric elements, mood-setting visuals, or creative visual approaches. Keep suggestions concise and directly actionable.
+Keep every suggestion rooted in the visuals—camera language, lighting treatment, composition, color or blocking choices. Do not offer plot beats, character arcs, or other story ideation guidance.
 
 Context: ${enhancedContext}
 
-Provide your creative visual concepts:`,
+Respond with cinematography-focused ideas only:`,
         });
 
         const aiSuggestions = extractCleanSuggestions(aiResponse.text);
-        
-        // Combine knowledge-based and AI suggestions
-        const allSuggestions = [...knowledgeSuggestions, ...aiSuggestions].slice(0, 5);
-        
+
+        // Combine knowledge-based and AI suggestions and enforce cinematography focus
+        const combinedSuggestions = [
+            ...knowledgeSuggestions,
+            ...aiSuggestions
+        ];
+
+        const focusedSuggestions = await enforceCinematographyFocus(combinedSuggestions, enhancedContext, currentQuestion);
+
         return {
-            suggestions: allSuggestions,
+            suggestions: focusedSuggestions,
             relevantKnowledge
         };
     } catch (error) {
