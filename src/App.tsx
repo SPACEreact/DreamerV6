@@ -3258,8 +3258,18 @@ export default function App() {
     const handleRandomAnswer = async (id: keyof PromptData, question: string) => {
         setIsGeneratingRandom(true);
         try {
-            const inspiration = await getRandomInspiration(formatValue(promptData.sceneCore), question);
-            handleAnswer(id, inspiration);
+            // First check if current question has randomOptions defined
+            const currentQuestion = activeQuestions?.[currentQuestionIndex];
+            if (currentQuestion?.randomOptions && currentQuestion.randomOptions.length > 0) {
+                // Pick a random option from the question's predefined suggestions
+                const randomIndex = Math.floor(Math.random() * currentQuestion.randomOptions.length);
+                const randomSuggestion = currentQuestion.randomOptions[randomIndex];
+                handleAnswer(id, randomSuggestion);
+            } else {
+                // Fall back to AI-generated inspiration if no predefined options
+                const inspiration = await getRandomInspiration(formatValue(promptData.sceneCore), question);
+                handleAnswer(id, inspiration);
+            }
         } catch (error) {
             handleAIServiceError(error, 'Random Inspiration');
             // Provide a fallback inspiration
