@@ -118,14 +118,26 @@ export class StoryIdeationService {
     const question = storyIdeationQuestions.find(q => q.id === questionId);
     if (!question) return [];
 
-    return question.knowledgePrompts.flatMap(prompt => 
+    return question.knowledgePrompts.flatMap(prompt =>
       preloadedKnowledgeBase
-        .filter(doc => 
+        .filter(doc =>
           doc.extractedKnowledge?.themes?.some(theme => theme.includes(prompt)) ||
           doc.extractedKnowledge?.techniques?.some(technique => technique.includes(prompt)) ||
           doc.name.toLowerCase().includes(prompt.toLowerCase())
         )
-        .map(doc => `📚 ${doc.name}: ${doc.extractedKnowledge?.themes?.slice(0, 2).join(', ') || 'Key insights'}...`)
+        .map(doc => {
+          const themes = doc.extractedKnowledge?.themes;
+          const techniques = doc.extractedKnowledge?.techniques;
+          const highlightSource = Array.isArray(themes) && themes.length
+            ? themes.slice(0, 2)
+            : Array.isArray(techniques) && techniques.length
+              ? techniques.slice(0, 2)
+              : null;
+
+          const highlightText = highlightSource?.join(', ') || 'Key insights';
+
+          return `📚 ${doc.name}: ${highlightText}...`;
+        })
     );
   }
 

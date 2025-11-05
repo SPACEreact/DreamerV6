@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Lightbulb,
@@ -47,16 +47,59 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
 
   const shouldShowCurrentQuestion = StoryIdeationService.shouldShowQuestion(currentQuestion.id, context);
 
-  useEffect(() => {
-    if (shouldShowCurrentQuestion && currentQuestionState?.answer) {
-      const updatedContext = { ...context, [currentQuestion.id]: currentQuestionState.answer };
-      setContext(updatedContext);
+  const answersMap = useMemo(() => {
+    return questions.reduce((acc, q) => {
+      acc[q.id] = q.answer;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [questions]);
 
-      // Update context for age-based insights
-      if (currentQuestion.id === 'protagonist' && currentQuestionState.answer) {
-        const ageMatch = currentQuestionState.answer.match(/(\d+)/);
-        if (ageMatch) {
-          updatedContext.age = ageMatch[1];
+  useEffect(() => {
+    if (!shouldShowCurrentQuestion) {
+      return;
+    }
+
+    let isActive = true;
+
+    const fetchSuggestions = async () => {
+      setIsGeneratingSuggestions(true);
+
+      const knowledge = StoryIdeationService.getRelevantKnowledge(currentQuestion.id);
+      if (isActive) {
+        setKnowledgeInsights(knowledge);
+      }
+
+      try {
+        const smartSuggestions = await StoryIdeationService.generateSmartSuggestions(
+          currentQuestion.id,
+          context,
+          answersMap
+        );
+
+        if (isActive) {
+          const normalizedSuggestions = Array.from(
+            new Set(
+              (smartSuggestions || [])
+                .map(suggestion => suggestion.trim())
+                .filter(suggestion => suggestion.length > 0)
+            )
+          );
+          setSuggestions(normalizedSuggestions);
+        }
+      } catch (error) {
+        if (isActive) {
+          const fallbackSuggestions = Array.from(
+            new Set(
+              StoryIdeationService.getRelevantKnowledge(currentQuestion.id)
+                .map(suggestion => suggestion.trim())
+                .filter(suggestion => suggestion.length > 0)
+            )
+          );
+          setSuggestions(fallbackSuggestions);
+        }
+      } finally {
+        if (isActive) {
+          setIsGeneratingSuggestions(false);
         }
       }
     }
@@ -140,12 +183,8 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
     };
   }, [context, currentQuestion.id, questions, shouldShowCurrentQuestion]);
 
-  const handleAnswerChange = (answer: string) => {
-    setQuestions(prev => prev.map(q => 
-      q.id === currentQuestion.id 
-        ? { ...q, answer: answer.trim(), completed: answer.trim().length > 0 }
-        : q
-    ));
+      return updatedContext;
+    });
   };
 
   const handleSuggestionClick = (suggestion: string) => {
