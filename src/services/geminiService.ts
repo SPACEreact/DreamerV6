@@ -462,23 +462,6 @@ export const enhanceShotPrompt = async (basePrompt: string, context: string): Pr
     }
 };
 
-export const generateStoryFromIdea = async (idea: string): Promise<string[]> => {
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
-            contents: `Based on this cinematic concept: "${idea}"\n\nGenerate 3-5 creative scene descriptions that expand this idea into vivid, director-level prompts. Each should be 1-2 sentences and capture mood, character, and visual atmosphere. Format them as separate paragraphs, separated by a double newline.`,
-            config: {
-
-            },
-        });
-        const content = response.text;
-        return content.split(/\n\n+/).map(scene => scene.trim()).filter(Boolean);
-    } catch (error) {
-        handleAIServiceError(error, 'Story Generation');
-        return [];
-    }
-};
-
 export const generateImage = async (prompt: string, aspectRatio: string = '16:9', style: 'cinematic' | 'explainer' = 'cinematic'): Promise<string> => {
     try {
       const stylePrefix = style === 'explainer'

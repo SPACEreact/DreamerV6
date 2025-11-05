@@ -94,10 +94,12 @@ import { StoryIdeation } from './components/StoryIdeation';
 
 import { generateImage, generateNanoImage } from './services/imageGenerationService';
 import { 
+    generateStoryFromIdea
+} from './services/storyService';
+import { 
     extractKnowledge, 
     getAISuggestions, 
     enhanceShotPrompt, 
-    generateStoryFromIdea, 
     getRandomInspiration,
     generateStoryboard, 
     generateVideoPrompt,
