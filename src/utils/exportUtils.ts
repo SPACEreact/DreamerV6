@@ -83,7 +83,6 @@ export const exportImage = async (imageUrl: string, filename: string, format: 'p
 
     URL.revokeObjectURL(img.src);
   } catch (error) {
-    console.error('Failed to export image:', error);
     // Fallback: direct download
     downloadDataUrl(imageUrl, filename);
   }
@@ -102,7 +101,6 @@ export const exportAudio = async (audioUrl: string, filename: string, format: 'm
     downloadDataUrl(url, filename);
     URL.revokeObjectURL(url);
   } catch (error) {
-    console.error('Failed to export audio:', error);
     // Fallback
     downloadDataUrl(audioUrl, filename);
   }
@@ -288,7 +286,6 @@ export const batchExport = async (
       // Add small delay between downloads
       await new Promise(resolve => setTimeout(resolve, 500));
     } catch (error) {
-      console.error(`Failed to export ${item.filename}:`, error);
     }
   }
 };

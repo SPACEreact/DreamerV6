@@ -21,7 +21,7 @@ export const generateRealImage = async (prompt: string, aspectRatio: string = '1
         
         // Select an appropriate professional image based on prompt keywords
         const selectedImage = selectAppropriateImage(prompt);
-        console.log("Using professional image for prompt:", prompt.substring(0, 50) + "...");
+
         
         // Convert the selected image to base64
         const response = await fetch(selectedImage);
@@ -34,8 +34,7 @@ export const generateRealImage = async (prompt: string, aspectRatio: string = '1
         return await createProfessionalPlaceholder(enhancedPrompt, aspectRatio);
         
     } catch (error) {
-        console.error("Image generation failed:", error);
-        // Always provide a professional fallback
+        // Image generation failed, using professional placeholder
         return await createProfessionalPlaceholder(prompt, aspectRatio);
     }
 };
@@ -163,7 +162,7 @@ export const batchGenerateImages = async (prompts: string[]): Promise<{prompt: s
             const imageData = await generateRealImage(prompt);
             results.push({ prompt, base64: imageData, success: true });
         } catch (error) {
-            console.error(`Failed to generate image for prompt: ${prompt}`, error);
+            // Failed to generate image for this prompt
             results.push({ prompt, base64: '', success: false });
         }
     }

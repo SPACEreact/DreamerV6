@@ -180,7 +180,6 @@ export const analyzeCharacter = async (
         };
         
     } catch (error) {
-        console.error("Character analysis failed:", error);
         // Return safe default
         return {
             name: characterName,
@@ -301,7 +300,6 @@ export const generateCastingSuggestions = async (
         };
         
     } catch (error) {
-        console.error("Casting suggestions generation failed:", error);
         return {
             id: crypto.randomUUID(),
             characterName: character.name,

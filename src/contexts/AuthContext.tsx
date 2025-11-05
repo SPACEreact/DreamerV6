@@ -40,12 +40,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         if (error) {
-          console.error('Error loading session:', error);
+          // Session loading error handled silently
         }
         setSession(currentSession);
         setUser(currentSession?.user || null);
       } catch (error) {
-        console.error('Failed to load session:', error);
+        // Session loading error handled silently
       } finally {
         setLoading(false);
       }
@@ -79,7 +79,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        console.error('Sign up error:', error);
         toast.error(error.message || 'Failed to sign up');
         return { error };
       }
@@ -90,7 +89,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { error: null };
     } catch (error: any) {
-      console.error('Sign up exception:', error);
       toast.error('Failed to sign up');
       return { error };
     }
@@ -104,7 +102,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        console.error('Sign in error:', error);
         toast.error(error.message || 'Failed to sign in');
         return { error };
       }
@@ -115,7 +112,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { error: null };
     } catch (error: any) {
-      console.error('Sign in exception:', error);
       toast.error('Failed to sign in');
       return { error };
     }
@@ -126,7 +122,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error } = await supabase.auth.signOut();
 
       if (error) {
-        console.error('Sign out error:', error);
         toast.error('Failed to sign out');
         return { error };
       }
@@ -134,7 +129,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.success('Signed out successfully');
       return { error: null };
     } catch (error: any) {
-      console.error('Sign out exception:', error);
       toast.error('Failed to sign out');
       return { error };
     }
@@ -147,7 +141,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        console.error('Password reset error:', error);
         toast.error(error.message || 'Failed to send reset email');
         return { error };
       }
@@ -155,7 +148,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.success('Password reset email sent!');
       return { error: null };
     } catch (error: any) {
-      console.error('Password reset exception:', error);
       toast.error('Failed to send reset email');
       return { error };
     }
@@ -168,7 +160,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        console.error('Profile update error:', error);
         toast.error(error.message || 'Failed to update profile');
         return { error };
       }
@@ -176,7 +167,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.success('Profile updated successfully');
       return { error: null };
     } catch (error: any) {
-      console.error('Profile update exception:', error);
       toast.error('Failed to update profile');
       return { error };
     }

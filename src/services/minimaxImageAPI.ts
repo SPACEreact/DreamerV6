@@ -10,14 +10,14 @@ export const generateImageWithMinimax = async (
         // This function would be called by a backend service
         // For now, return a promise that resolves to base64 image data
         
-        console.log('🎬 Generating real image with prompt:', prompt.substring(0, 100));
+        // Generating real image with enhanced prompt
         
         // The actual MiniMax generation would happen here
         // This is a placeholder that returns the enhanced prompt for generation
         return await createEnhancedImage(prompt, aspectRatio);
         
     } catch (error) {
-        console.error("MiniMax image generation failed:", error);
+        // MiniMax image generation failed
         throw error;
     }
 };
@@ -38,7 +38,7 @@ const createEnhancedImage = async (prompt: string, aspectRatio: string): Promise
         return base64;
         
     } catch (error) {
-        console.error("Enhanced image creation failed:", error);
+        // Enhanced image creation failed
         return createFallbackPlaceholder();
     }
 };
@@ -155,7 +155,7 @@ export const generateRealImageForClient = async (
         // In a real implementation, this would make a request to a backend endpoint
         // that uses the MiniMax toolkit to generate actual images
         
-        console.log('🎨 Client requesting image generation for:', prompt.substring(0, 50));
+        // Client requesting image generation
         
         // For now, return enhanced cinematic placeholder
         // In production, this would:
@@ -166,7 +166,7 @@ export const generateRealImageForClient = async (
         return await generateImageWithMinimax(prompt, aspectRatio);
         
     } catch (error) {
-        console.error("Client image generation failed:", error);
+        // Client image generation failed
         return createFallbackPlaceholder();
     }
 };

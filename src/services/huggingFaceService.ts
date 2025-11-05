@@ -22,7 +22,7 @@ const initializeTransformers = async () => {
       // @ts-ignore
       transformers = await import('@huggingface/transformers');
     } catch (error) {
-      console.warn('HuggingFace Transformers.js not available. Using fallback implementations.');
+      // HuggingFace Transformers.js not available. Using fallback implementations.
       return null;
     }
   }
@@ -72,7 +72,7 @@ export class HuggingFaceService {
     try {
       const tf = await initializeTransformers();
       if (!tf) {
-        console.info('Using fallback implementations for HuggingFace service');
+
         this.isInitialized = true;
         return;
       }
@@ -82,14 +82,14 @@ export class HuggingFaceService {
       try {
         this.textClassifier = await tf.pipeline('sentiment-analysis', 'Xenova/distilbert-base-uncased-finetuned-sst-2-english');
         this.textSummarizer = await tf.pipeline('summarization', 'Xenova/distilbart-cnn-6-6');
-        console.log('HuggingFace models initialized successfully');
+
       } catch (modelError) {
-        console.warn('Failed to load specific models, using fallbacks:', modelError);
+        // Failed to load specific models, using fallbacks
       }
 
       this.isInitialized = true;
     } catch (error) {
-      console.warn('HuggingFace initialization failed, using fallback implementations:', error);
+      // HuggingFace initialization failed, using fallback implementations
       this.isInitialized = true; // Still allow service to work with fallbacks
     }
   }
@@ -101,7 +101,7 @@ export class HuggingFaceService {
         return result[0].label === 'POSITIVE' ? 'positive' : 'negative';
       }
     } catch (error) {
-      console.warn('Sentiment analysis failed, using fallback:', error);
+      // Sentiment analysis failed, using fallback
     }
     return fallbackTextAnalysis(text).sentiment || 'neutral';
   }
@@ -120,7 +120,7 @@ export class HuggingFaceService {
         return keywords;
       }
     } catch (error) {
-      console.warn('Keyword extraction failed, using fallback:', error);
+      // Keyword extraction failed, using fallback
     }
     return fallbackTextAnalysis(text).keywords || [];
   }
@@ -135,7 +135,7 @@ export class HuggingFaceService {
         return result[0].summary_text;
       }
     } catch (error) {
-      console.warn('Text summarization failed, using fallback:', error);
+      // Text summarization failed, using fallback
     }
     return fallbackSummarization(text);
   }
@@ -185,7 +185,6 @@ export class HuggingFaceService {
         genre
       };
     } catch (error) {
-      console.error('Narrative analysis failed:', error);
       return {
         emotionalTone: 'neutral',
         narrativeElements: ['storytelling'],
@@ -214,7 +213,6 @@ export class HuggingFaceService {
 
       return enhancedPrompt;
     } catch (error) {
-      console.error('Prompt enhancement failed:', error);
       return originalPrompt;
     }
   }
@@ -239,7 +237,6 @@ export class HuggingFaceService {
 
       return suggestions.length > 0 ? suggestions : ['Focus on storytelling', 'Enhance visual elements', 'Consider pacing'];
     } catch (error) {
-      console.error('Content suggestions failed:', error);
       return ['Focus on storytelling', 'Enhance visual elements', 'Consider pacing'];
     }
   }
@@ -313,7 +310,6 @@ export class HuggingFaceService {
 
       return suggestions;
     } catch (error) {
-      console.error('Suggestion generation failed:', error);
       return ['Focus on clear storytelling', 'Consider character motivation', 'Think about visual elements'];
     }
   }

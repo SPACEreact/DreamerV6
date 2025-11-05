@@ -28,7 +28,6 @@ export class LLamaProvider implements ICastingProvider {
   private initialized: boolean = false;
 
   async init(config: CastingProviderConfig): Promise<void> {
-    console.log('[LLaMA Provider] Initializing...');
     
     if (!config.apiKey) {
       throw new Error('LLaMA Provider requires Hugging Face API key');
@@ -55,7 +54,6 @@ export class LLamaProvider implements ICastingProvider {
     }
 
     this.initialized = true;
-    console.log('[LLaMA Provider] Initialized successfully');
   }
 
   async generateCasting(
@@ -81,7 +79,6 @@ export class LLamaProvider implements ICastingProvider {
       // Build comprehensive prompt for LLaMA
       const prompt = this.buildCastingPrompt(request);
 
-      console.log('[LLaMA Provider] Sending request', {
         requestId,
         characterName: request.character.name,
         promptLength: prompt.length
@@ -134,7 +131,6 @@ export class LLamaProvider implements ICastingProvider {
         progress: 100
       });
 
-      console.log('[LLaMA Provider] Casting generated successfully', {
         requestId,
         recommendationCount: castingResponse.recommendations.length,
         generationTime: castingResponse.metadata.generationTime
@@ -143,7 +139,6 @@ export class LLamaProvider implements ICastingProvider {
       return castingResponse;
 
     } catch (error) {
-      console.error('[LLaMA Provider] Generation failed:', error);
       
       this.updateProgress(onProgress, {
         providerId: this.id,
@@ -295,7 +290,6 @@ Format your response as a JSON object with this structure:
         }
       };
     } catch (error) {
-      console.warn('[LLaMA Provider] Failed to parse JSON response, using fallback');
       return this.createFallbackResponse(request);
     }
   }
@@ -382,7 +376,6 @@ Format your response as a JSON object with this structure:
 
       return HealthStatus.DEGRADED;
     } catch (error) {
-      console.error('[LLaMA Provider] Health check failed:', error);
       return HealthStatus.DOWN;
     }
   }

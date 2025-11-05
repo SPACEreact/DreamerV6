@@ -36,7 +36,6 @@ export class StableDiffusionXLProvider implements IImageProvider {
 
     this.config = config;
     this.initialized = true;
-    console.log('[SDXL Provider] Initialized successfully');
   }
 
   validateRequest(req: ImageRequest): ValidationResult {
@@ -97,7 +96,6 @@ export class StableDiffusionXLProvider implements IImageProvider {
     const correlationId = `sdxl-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      console.log('[SDXL Provider] Generating image...', { 
         prompt: req.prompt.substring(0, 100),
         correlationId 
       });
@@ -133,7 +131,6 @@ export class StableDiffusionXLProvider implements IImageProvider {
         provider_raw: { correlationId }
       };
 
-      console.log('[SDXL Provider] Image generated successfully', { 
         latencyMs,
         correlationId 
       });
@@ -142,7 +139,6 @@ export class StableDiffusionXLProvider implements IImageProvider {
     } catch (error: any) {
       const latencyMs = Date.now() - startTime;
       
-      console.error('[SDXL Provider] Generation error:', error);
 
       throw this.createError(
         'GENERATION_ERROR',
@@ -260,7 +256,6 @@ export class StableDiffusionXLProvider implements IImageProvider {
   async dispose(): Promise<void> {
     this.config = null;
     this.initialized = false;
-    console.log('[SDXL Provider] Disposed');
   }
 
   private categorizeError(error: any): ErrorKind {

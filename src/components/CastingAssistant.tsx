@@ -67,7 +67,7 @@ export const CastingAssistant: React.FC<CastingAssistantProps> = ({
       onCastingDataUpdate(updated);
       setSelectedCharacter(characterName);
     } catch (error) {
-      console.error('Character analysis failed:', error);
+      // Character analysis failed
     } finally {
       setIsAnalyzing(false);
     }
@@ -99,7 +99,7 @@ export const CastingAssistant: React.FC<CastingAssistantProps> = ({
       setCastingData(updated);
       onCastingDataUpdate(updated);
     } catch (error) {
-      console.error('Casting suggestions failed:', error);
+      // Casting suggestions failed
     } finally {
       setIsGeneratingSuggestions(false);
     }

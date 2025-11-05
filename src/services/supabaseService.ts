@@ -42,14 +42,11 @@ export const saveUserProgress = async (data: {
             });
         
         if (error) {
-            console.error('Error saving progress:', error);
             return false;
         }
         
-        console.log('Progress saved successfully');
         return true;
     } catch (error) {
-        console.error('Failed to save progress:', error);
         return false;
     }
 };
@@ -70,7 +67,6 @@ export const loadUserProgress = async () => {
                 // No data found, return null
                 return null;
             }
-            console.error('Error loading progress:', error);
             return null;
         }
         
@@ -82,7 +78,6 @@ export const loadUserProgress = async () => {
             visualPresets: data.visual_presets || []
         };
     } catch (error) {
-        console.error('Failed to load progress:', error);
         return null;
     }
 };
@@ -119,14 +114,11 @@ export const saveStoryboard = async (name: string, data: {
             });
         
         if (error) {
-            console.error('Error saving storyboard:', error);
             return false;
         }
         
-        console.log('Storyboard saved successfully');
         return true;
     } catch (error) {
-        console.error('Failed to save storyboard:', error);
         return false;
     }
 };
@@ -143,13 +135,11 @@ export const loadStoryboards = async () => {
             .order('created_at', { ascending: false });
         
         if (error) {
-            console.error('Error loading storyboards:', error);
             return [];
         }
         
         return data || [];
     } catch (error) {
-        console.error('Failed to load storyboards:', error);
         return [];
     }
 };
@@ -163,13 +153,11 @@ export const deleteStoryboard = async (id: string) => {
             .eq('id', id);
         
         if (error) {
-            console.error('Error deleting storyboard:', error);
             return false;
         }
         
         return true;
     } catch (error) {
-        console.error('Failed to delete storyboard:', error);
         return false;
     }
 };

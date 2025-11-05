@@ -200,7 +200,6 @@ export class StoryIdeationService {
       const genre = await genreIntelligenceService.detectGenre(storyText, context as any);
       return genre.genre;
     } catch (error) {
-      console.warn('Genre analysis failed:', error);
       return null;
     }
   }
@@ -228,7 +227,6 @@ export class StoryIdeationService {
       // Fallback to knowledge-based suggestions
       return this.getRelevantKnowledge(questionId).slice(0, 2);
     } catch (error) {
-      console.warn('Smart suggestions failed:', error);
       return this.getRelevantKnowledge(questionId).slice(0, 2);
     }
   }

@@ -482,7 +482,7 @@ const extractJSON = (text: string): any => {
   try {
     return JSON.parse(text);
   } catch (e) {
-    console.warn('Direct JSON parse failed, trying extraction...');
+
   }
   
   // Strategy 2: Extract JSON from markdown code blocks
@@ -491,7 +491,7 @@ const extractJSON = (text: string): any => {
     try {
       return JSON.parse(jsonBlockMatch[1]);
     } catch (e) {
-      console.warn('JSON block extraction failed...');
+
     }
   }
   
@@ -516,7 +516,7 @@ const extractJSON = (text: string): any => {
         const jsonStr = text.substring(start, end + 1);
         return JSON.parse(jsonStr);
       } catch (e) {
-        console.warn('Brace extraction failed...');
+
       }
     }
   }
@@ -534,7 +534,7 @@ const extractJSON = (text: string): any => {
     }
     return JSON.parse(cleaned);
   } catch (e) {
-    console.error('All JSON parsing strategies failed');
+    // All JSON parsing strategies failed
   }
   
   throw new Error('Unable to extract valid JSON from response');
@@ -550,7 +550,7 @@ const validateResponse = (text: string): boolean => {
   
   // Check for obvious truncation indicators
   if (text.includes('...') && text.lastIndexOf('}') < text.length - 10) {
-    console.warn('Response may be truncated');
+
   }
   
   return true;
@@ -598,7 +598,7 @@ ${script}`;
         const estimatedTokens = tokenBudgetingSystem.estimateTokens(script, style);
         const actualMaxTokens = Math.min(estimatedTokens, maxTokens);
         
-        console.log(`🎬 Generating storyboard (${style}) - est: ${estimatedTokens}, max: ${actualMaxTokens}`);
+
         
         const response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
@@ -634,10 +634,10 @@ ${script}`;
 
         // Ensure the output is always an array
         if (Array.isArray(parsedData)) {
-            console.log(`✅ Generated ${parsedData.length} storyboard shots`);
+
             return parsedData;
         } else if (typeof parsedData === 'object' && parsedData !== null) {
-            console.log('✅ Generated single storyboard shot');
+
             return [parsedData];
         }
 
@@ -648,7 +648,7 @@ ${script}`;
         if (attempt < 3) {
             const retryPlan = tokenBudgetingSystem.calculateRetryTokens(attempt, error, maxTokens);
             if (retryPlan && retryPlan.shouldRetry) {
-                console.warn(`🔄 Retry attempt ${attempt + 1}: ${retryPlan.reason}`);
+
                 return generateStoryboardWithRetry(script, style, customInstructions, retryPlan.tokens, attempt + 1);
             }
         }

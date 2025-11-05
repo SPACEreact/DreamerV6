@@ -305,7 +305,6 @@ export const renderPlaceholderBase64 = (
     const dataUrl = canvas.toDataURL('image/png');
     return dataUrl.split(',')[1] || MINIMAL_PLACEHOLDER_BASE64;
   } catch (error) {
-    console.error('Failed to render placeholder image:', error);
     return MINIMAL_PLACEHOLDER_BASE64;
   }
 };

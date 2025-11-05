@@ -54,7 +54,7 @@ export const DualProviderImageGeneration: React.FC<DualProviderImageGenProps> = 
       const health = await dualProviderImageService.checkProvidersHealth();
       setProviderHealth(health);
     } catch (error) {
-      console.error('Health check failed:', error);
+      // Health check failed
     }
   };
 
@@ -101,7 +101,7 @@ export const DualProviderImageGeneration: React.FC<DualProviderImageGenProps> = 
       // Cleanup progress subscription
       dualProviderImageService.offProgress(requestId);
     } catch (error: any) {
-      console.error('Generation failed:', error);
+      // Generation failed
     } finally {
       setIsGenerating(false);
     }

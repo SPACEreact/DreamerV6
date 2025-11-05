@@ -21,7 +21,7 @@ export const PromptsExport: React.FC<PromptsExportProps> = ({
 
   const handleCopyPrompt = async () => {
     if (!finalPromptText) {
-      console.error('No final prompt text available');
+      // No final prompt text available
       return;
     }
 
@@ -30,7 +30,7 @@ export const PromptsExport: React.FC<PromptsExportProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      // Failed to copy
     }
   };
 
@@ -81,11 +81,12 @@ export const PromptsExport: React.FC<PromptsExportProps> = ({
       setShareUrl(url);
       setShowShareUrl(true);
 
-      setTimeout(() => {
-        setShowShareUrl(false);
-      }, 5000);
+        setTimeout(() => {
+          setShowShareUrl(false);
+        }, 5000);
+      }
     } catch (err) {
-      console.error('Failed to create share URL:', err);
+      // Failed to create share URL
     }
   };
 

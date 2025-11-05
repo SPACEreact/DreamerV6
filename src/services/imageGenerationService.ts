@@ -21,14 +21,13 @@ export const generateImage = async (
 
         const enhancedPrompt = `${stylePrefix}\n\nOriginal prompt: ${prompt}\n\nGenerate a high-quality ${aspectRatio} aspect ratio image that captures the essence of this cinematic scene with professional lighting and composition.`;
 
-        console.log('Generating cinematic image for:', prompt.substring(0, 100) + '...');
+
 
         // Use our real image generation service
         const { generateRealImage } = await import('./realImageGeneration');
         return await generateRealImage(enhancedPrompt, aspectRatio, style);
     } catch (error) {
-        console.error('Image generation failed:', error);
-        // Always provide a fallback image
+        // Image generation failed, using fallback
         return await generateImageDirect(prompt, aspectRatio, style);
     }
 };
@@ -39,10 +38,10 @@ export const generateImageDirect = async (
     style: 'cinematic' | 'explainer' = 'cinematic'
 ): Promise<string> => {
     try {
-        console.log('Using intelligent fallback for prompt:', prompt.substring(0, 100) + '...');
+
         return await generatePlaceholderImage(prompt, aspectRatio, style);
     } catch (error) {
-        console.error('Image generation failed:', error);
+        // Image generation failed, using placeholder
         return await generatePlaceholderImage(prompt, aspectRatio, style);
     }
 };
@@ -56,7 +55,7 @@ export const generatePlaceholderImage = async (
         const placeholderStyle = selectFallbackStyle(prompt, style);
         return renderPlaceholderBase64(prompt, aspectRatio, placeholderStyle);
     } catch (error) {
-        console.error('Placeholder generation failed:', error);
+        // Placeholder generation failed, using minimal placeholder
         return MINIMAL_PLACEHOLDER_BASE64;
     }
 };
@@ -72,12 +71,12 @@ export const generateNanoImage = async (
 
         const enhancedPrompt = `${stylePrefix}\n\nScene: ${prompt}\n\nGenerate a stylized, simplified version with strong visual impact and artistic flair.`;
 
-        console.log('Generating nano/stylized image for:', prompt.substring(0, 100) + '...');
+
 
         const { generateRealImage } = await import('./realImageGeneration');
         return await generateRealImage(enhancedPrompt, '1:1', style);
     } catch (error) {
-        console.error('Nano image generation failed:', error);
+        // Nano image generation failed, using fallback
         return await generateImageDirect(prompt, '1:1', style);
     }
 };

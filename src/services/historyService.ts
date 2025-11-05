@@ -84,7 +84,7 @@ class HistoryService {
         timestamp: new Date(item.timestamp)
       }));
     } catch (error) {
-      console.error('Failed to load history:', error);
+      // Failed to load history
       return [];
     }
   }
@@ -260,7 +260,7 @@ class HistoryService {
       this.saveHistory(history);
       return true;
     } catch (error) {
-      console.error('Failed to import history:', error);
+      // Failed to import history
       return false;
     }
   }
@@ -272,7 +272,7 @@ class HistoryService {
     try {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(history));
     } catch (error) {
-      console.error('Failed to save history:', error);
+      // Failed to save history
     }
   }
 }

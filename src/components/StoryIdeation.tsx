@@ -80,7 +80,7 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
         setContext(prev => ({ ...prev, genre }));
       }
     } catch (error) {
-      console.warn('Genre analysis failed:', error);
+      // Genre analysis failed
     }
   };
 
@@ -106,7 +106,7 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
       const knowledge = StoryIdeationService.getRelevantKnowledge(currentQuestion.id);
       setKnowledgeInsights(knowledge);
     } catch (error) {
-      console.warn('Suggestion generation failed:', error);
+      // Suggestion generation failed
     } finally {
       setIsGeneratingSuggestions(false);
     }

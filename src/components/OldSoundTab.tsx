@@ -91,7 +91,7 @@ export const OldSoundTab: React.FC<OldSoundTabProps> = ({
         onGenerate(audioData);
       }
     } catch (error) {
-      console.error('Audio generation failed:', error);
+      // Audio generation failed
       alert('Failed to generate audio. Please try again.');
     } finally {
       setIsGenerating(false);
@@ -125,7 +125,7 @@ export const OldSoundTab: React.FC<OldSoundTabProps> = ({
     const url = advancedAudioResult?.primary?.audios?.[0]?.url;
     if (!url) {
       if (generatedAudio) {
-        console.log('Download audio:', generatedAudio);
+        // Download audio data available
       }
       return;
     }

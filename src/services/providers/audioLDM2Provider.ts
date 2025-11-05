@@ -37,7 +37,7 @@ export class AudioLDM2Provider implements IAudioProvider {
 
     this.config = config;
     this.initialized = true;
-    console.log('[AudioLDM2 Provider] Initialized successfully');
+
   }
 
   validateRequest(req: AudioRequest): ValidationResult {
@@ -113,11 +113,7 @@ export class AudioLDM2Provider implements IAudioProvider {
     const correlationId = `audioldm2-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      console.log('[AudioLDM2 Provider] Generating audio...', { 
-        text: req.text.substring(0, 100),
-        mode: req.mode,
-        duration: req.duration,
-        correlationId 
+ 
       });
 
       // Prepare request payload for Hugging Face Inference API
@@ -155,7 +151,7 @@ export class AudioLDM2Provider implements IAudioProvider {
         provider_raw: { correlationId }
       };
 
-      console.log('[AudioLDM2 Provider] Audio generated successfully', { 
+ 
         latencyMs,
         duration_ms: audioResponse.duration_ms,
         correlationId 
@@ -165,7 +161,6 @@ export class AudioLDM2Provider implements IAudioProvider {
     } catch (error: any) {
       const latencyMs = Date.now() - startTime;
       
-      console.error('[AudioLDM2 Provider] Generation error:', error);
 
       throw this.createError(
         'GENERATION_ERROR',
@@ -216,7 +211,7 @@ export class AudioLDM2Provider implements IAudioProvider {
         // Don't sleep after last attempt
         if (attempt < maxRetries) {
           const backoffMs = this.calculateBackoff(attempt, baseBackoffMs);
-          console.log(`[AudioLDM2 Provider] Retry attempt ${attempt + 1}/${maxRetries} after ${backoffMs}ms`, {
+
             correlationId,
             error: error.message
           });
@@ -388,7 +383,7 @@ export class AudioLDM2Provider implements IAudioProvider {
   async dispose(): Promise<void> {
     this.config = null;
     this.initialized = false;
-    console.log('[AudioLDM2 Provider] Disposed');
+
   }
 
   private categorizeError(error: any): ErrorKind {

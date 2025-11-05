@@ -38,7 +38,6 @@ export class GeminiImageProvider implements IImageProvider {
     this.config = config;
     this.client = new GoogleGenAI({ apiKey: config.apiKey });
     this.initialized = true;
-    console.log('[Gemini Provider] Initialized successfully');
   }
 
   validateRequest(req: ImageRequest): ValidationResult {
@@ -92,7 +91,6 @@ export class GeminiImageProvider implements IImageProvider {
     const correlationId = `gemini-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      console.log('[Gemini Provider] Generating image...', {
         prompt: req.prompt.substring(0, 100),
         correlationId
       });
@@ -129,7 +127,6 @@ export class GeminiImageProvider implements IImageProvider {
         provider_raw: { correlationId, fullPrompt }
       };
 
-      console.log('[Gemini Provider] Image generated successfully', {
         latencyMs,
         correlationId
       });
@@ -138,7 +135,6 @@ export class GeminiImageProvider implements IImageProvider {
     } catch (error: any) {
       const latencyMs = Date.now() - startTime;
 
-      console.error('[Gemini Provider] Generation error:', error);
 
       throw this.createError(
         'GENERATION_ERROR',
@@ -272,7 +268,6 @@ export class GeminiImageProvider implements IImageProvider {
     this.config = null;
     this.client = null;
     this.initialized = false;
-    console.log('[Gemini Provider] Disposed');
   }
 
   private categorizeError(error: any): ErrorKind {

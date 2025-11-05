@@ -55,13 +55,11 @@ class SupabaseHistoryService {
         .maybeSingle();
 
       if (error) {
-        console.error('Failed to add to history:', error);
         throw error;
       }
 
       return data?.id || '';
     } catch (error) {
-      console.error('Error adding to history:', error);
       throw error;
     }
   }
@@ -78,13 +76,11 @@ class SupabaseHistoryService {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Failed to fetch history:', error);
         return [];
       }
 
       return (data || []).map(this.mapToHistoryItem);
     } catch (error) {
-      console.error('Error fetching history:', error);
       return [];
     }
   }
@@ -129,7 +125,6 @@ class SupabaseHistoryService {
       const { data, error } = await query;
 
       if (error) {
-        console.error('Failed to fetch filtered history:', error);
         return [];
       }
 
@@ -144,7 +139,6 @@ class SupabaseHistoryService {
 
       return items;
     } catch (error) {
-      console.error('Error fetching filtered history:', error);
       return [];
     }
   }
@@ -167,7 +161,6 @@ class SupabaseHistoryService {
 
       return this.mapToHistoryItem(data);
     } catch (error) {
-      console.error('Error fetching history item:', error);
       return null;
     }
   }
@@ -186,11 +179,9 @@ class SupabaseHistoryService {
         .eq('user_id', this.userId);
 
       if (error) {
-        console.error('Failed to update rating:', error);
         throw error;
       }
     } catch (error) {
-      console.error('Error updating rating:', error);
       throw error;
     }
   }
@@ -220,11 +211,9 @@ class SupabaseHistoryService {
         .eq('user_id', this.userId);
 
       if (error) {
-        console.error('Failed to toggle favorite:', error);
         throw error;
       }
     } catch (error) {
-      console.error('Error toggling favorite:', error);
       throw error;
     }
   }
@@ -241,11 +230,9 @@ class SupabaseHistoryService {
         .eq('user_id', this.userId);
 
       if (error) {
-        console.error('Failed to update notes:', error);
         throw error;
       }
     } catch (error) {
-      console.error('Error updating notes:', error);
       throw error;
     }
   }
@@ -273,11 +260,9 @@ class SupabaseHistoryService {
         .eq('user_id', this.userId);
 
       if (error) {
-        console.error('Failed to add tags:', error);
         throw error;
       }
     } catch (error) {
-      console.error('Error adding tags:', error);
       throw error;
     }
   }
@@ -305,11 +290,9 @@ class SupabaseHistoryService {
         .eq('user_id', this.userId);
 
       if (error) {
-        console.error('Failed to remove tag:', error);
         throw error;
       }
     } catch (error) {
-      console.error('Error removing tag:', error);
       throw error;
     }
   }
@@ -326,11 +309,9 @@ class SupabaseHistoryService {
         .eq('user_id', this.userId);
 
       if (error) {
-        console.error('Failed to delete history item:', error);
         throw error;
       }
     } catch (error) {
-      console.error('Error deleting history item:', error);
       throw error;
     }
   }
@@ -346,11 +327,9 @@ class SupabaseHistoryService {
         .eq('user_id', this.userId);
 
       if (error) {
-        console.error('Failed to clear history:', error);
         throw error;
       }
     } catch (error) {
-      console.error('Error clearing history:', error);
       throw error;
     }
   }
@@ -376,7 +355,6 @@ class SupabaseHistoryService {
         ratedItems: history.filter(h => h.rating).length
       };
     } catch (error) {
-      console.error('Error getting statistics:', error);
       return {
         total: 0,
         byType: { image: 0, audio: 0, casting: 0 },
@@ -451,7 +429,6 @@ class SupabaseHistoryService {
           });
           migrated++;
         } catch (error) {
-          console.error('Failed to migrate item:', error);
         }
       }
 
@@ -462,7 +439,6 @@ class SupabaseHistoryService {
 
       return migrated;
     } catch (error) {
-      console.error('Error during migration:', error);
       return 0;
     }
   }

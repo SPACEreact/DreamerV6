@@ -73,7 +73,7 @@ export const DualProviderAudioGeneration: React.FC<DualProviderAudioGenProps> = 
       const health = await dualProviderAudioService.checkProvidersHealth();
       setProviderHealth(health);
     } catch (error) {
-      console.error('Health check failed:', error);
+      // Health check failed
     }
   };
 
@@ -121,7 +121,7 @@ export const DualProviderAudioGeneration: React.FC<DualProviderAudioGenProps> = 
       // Cleanup progress subscription
       dualProviderAudioService.offProgress(requestId);
     } catch (error: any) {
-      console.error('Audio generation failed:', error);
+      // Audio generation failed
     } finally {
       setIsGenerating(false);
     }

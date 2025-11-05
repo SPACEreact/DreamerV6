@@ -75,7 +75,7 @@ export const SoundDesignModule: React.FC<SoundDesignModuleProps> = ({
       setSoundData(updated);
       onSoundDataUpdate(updated);
     } catch (error) {
-      console.error('Mood analysis failed:', error);
+      // Mood analysis failed
     } finally {
       setIsAnalyzing(false);
     }
@@ -99,7 +99,7 @@ export const SoundDesignModule: React.FC<SoundDesignModuleProps> = ({
       setSoundData(updated);
       onSoundDataUpdate(updated);
     } catch (error) {
-      console.error('Sound suggestions failed:', error);
+      // Sound suggestions failed
     } finally {
       setIsGeneratingSuggestions(false);
     }
@@ -122,7 +122,7 @@ export const SoundDesignModule: React.FC<SoundDesignModuleProps> = ({
       setSoundData(updated);
       onSoundDataUpdate(updated);
     } catch (error) {
-      console.error('Foley generation failed:', error);
+      // Foley generation failed
     } finally {
       setIsGeneratingFoley(false);
     }

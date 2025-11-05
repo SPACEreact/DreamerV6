@@ -123,7 +123,7 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
 
       toast.success('Export completed');
     } catch (error) {
-      console.error('Export failed:', error);
+      // Export failed
       toast.error('Export failed');
     }
   };

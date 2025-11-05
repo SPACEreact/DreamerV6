@@ -159,7 +159,6 @@ export const analyzeSoundMood = async (
         return detectedMoods.slice(0, 3);
         
     } catch (error) {
-        console.error("Sound mood analysis failed:", error);
         return ['ambient']; // Safe fallback
     }
 };
@@ -215,7 +214,6 @@ export const generateSoundSuggestions = async (
         return suggestions;
         
     } catch (error) {
-        console.error("Sound suggestions generation failed:", error);
         return [];
     }
 };
@@ -284,7 +282,6 @@ export const generateFoleySuggestions = async (
         return foley.slice(0, 8); // Limit to 8 suggestions
         
     } catch (error) {
-        console.error("Foley suggestions generation failed:", error);
         return [];
     }
 };

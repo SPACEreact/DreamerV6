@@ -36,7 +36,6 @@ class TextToSpeechService {
     
     speak(text: string, options: { voice?: string, rate?: number, pitch?: number } = {}) {
         if (!this.synth) {
-            console.warn('Text-to-Speech not supported in this environment');
             return;
         }
         
@@ -112,7 +111,7 @@ export const analyzeSoundMoodEnhanced = async (
         
         return { moods, reasoning };
     } catch (error) {
-        console.error('Enhanced sound mood analysis failed:', sanitizeErrorMessage(error));
+        // Enhanced sound mood analysis failed, using default
         return { 
             moods: ['ambient'], 
             reasoning: 'Using default ambient mood due to analysis error.' 
@@ -138,7 +137,7 @@ export const generateSoundSuggestionsEnhanced = async (
         
         return { suggestions, description };
     } catch (error) {
-        console.error('Enhanced sound suggestions failed:', sanitizeErrorMessage(error));
+        // Enhanced sound suggestions failed, using default
         return { 
             suggestions: [], 
             description: 'Sound generation encountered an error.' 
@@ -162,7 +161,7 @@ export const generateFoleySuggestionsEnhanced = async (
         
         return { suggestions, insights };
     } catch (error) {
-        console.error('Enhanced foley suggestions failed:', sanitizeErrorMessage(error));
+        // Enhanced foley suggestions failed, using default
         return { 
             suggestions: [], 
             insights: 'Foley generation encountered an error.' 
@@ -194,7 +193,7 @@ export const analyzeCharacterEnhanced = async (
         
         return { analysis, insights };
     } catch (error) {
-        console.error('Enhanced character analysis failed:', sanitizeErrorMessage(error));
+        // Enhanced character analysis failed, using default
         return {
             analysis: {
                 name: characterName,
@@ -228,7 +227,7 @@ export const generateCastingSuggestionsEnhanced = async (
         
         return { suggestions, diversityScore, summary };
     } catch (error) {
-        console.error('Enhanced casting suggestions failed:', sanitizeErrorMessage(error));
+        // Enhanced casting suggestions failed, using default
         return {
             suggestions: {
                 id: crypto.randomUUID(),
@@ -258,7 +257,7 @@ const calculateDiversityScore = (castingSuggestion: CastingSuggestion): number =
         const score = (uniqueBackgrounds.size / castingSuggestion.suggestions.length) * 100;
         return Math.min(100, Math.max(0, score)); // Ensure score is between 0-100
     } catch (error) {
-        console.error('Error calculating diversity score:', sanitizeErrorMessage(error));
+        // Error calculating diversity score, returning 0
         return 0;
     }
 };

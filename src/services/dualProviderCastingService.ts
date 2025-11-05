@@ -48,9 +48,9 @@ export class DualProviderCastingService {
       await geminiProvider.init(this.config.providers.geminiCasting);
       this.providers.set('gemini-casting', geminiProvider);
 
-      console.log('[Dual-Provider Casting Service] All providers initialized');
+
     } catch (error) {
-      console.error('[Dual-Provider Casting Service] Provider initialization failed:', error);
+      // Provider initialization failed
       throw error;
     }
   }
@@ -62,13 +62,7 @@ export class DualProviderCastingService {
     const requestId = `casting-req-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const startTime = Date.now();
 
-    console.log('[Dual-Provider Casting Service] Starting dual-provider generation', {
-      requestId,
-      providerA: request.providerA,
-      providerB: request.providerB,
-      crossValidation: request.enableCrossValidation,
-      characterName: request.request.character.name
-    });
+
 
     // Initialize progress tracking
     const progress: DualProviderCastingProgress = {
@@ -196,18 +190,11 @@ export class DualProviderCastingService {
 
       showSuccessToast({ title: 'Casting recommendations generated' });
 
-      console.log('[Dual-Provider Casting Service] Generation complete', {
-        requestId,
-        selectedProvider,
-        recommendationCount: consensusRecommendations.length,
-        totalTime: response.totalGenerationTime
-      });
+
 
       return response;
 
     } catch (error) {
-      console.error('[Dual-Provider Casting Service] Generation failed:', error);
-      
       const apiError = createAPIError(
         error instanceof Error ? error.message : String(error),
         {
@@ -239,7 +226,7 @@ export class DualProviderCastingService {
     try {
       return await primaryProvider.generateCasting(request);
     } catch (error) {
-      console.warn(`[Dual-Provider Casting Service] Primary provider ${primaryProviderId} failed`, error);
+      // Primary provider failed
       
       if (fallbackProviderId) {
         const fallbackProvider = this.providers.get(fallbackProviderId);
@@ -250,7 +237,7 @@ export class DualProviderCastingService {
           try {
             return await fallbackProvider.generateCasting(request);
           } catch (fallbackError) {
-            console.error(`[Dual-Provider Casting Service] Fallback provider ${fallbackProviderId} also failed`, fallbackError);
+            // Fallback provider also failed
             throw fallbackError;
           }
         }
@@ -270,7 +257,7 @@ export class DualProviderCastingService {
     providerBId: CastingProviderId,
     responseB: CastingResponse
   ): CrossValidationReport {
-    console.log('[Dual-Provider Casting Service] Performing cross-validation');
+
 
     // Calculate quality scores
     const qualityA = this.calculateQualityScore(responseA);
@@ -506,7 +493,7 @@ export class DualProviderCastingService {
         const health = await provider.healthCheck();
         healthMap.set(id, health);
       } catch (error) {
-        console.error(`[Dual-Provider Casting Service] Health check failed for ${id}:`, error);
+        // Health check failed
         healthMap.set(id, HealthStatus.DOWN);
       }
     }

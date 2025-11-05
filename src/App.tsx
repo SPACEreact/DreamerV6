@@ -212,7 +212,6 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Error caught by boundary:', error, errorInfo);
     // Log error with context
     appLogger.error('ErrorBoundary caught error:', error.message, { stack: error.stack, errorInfo });
   }
@@ -256,16 +255,13 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
 
 // Utility functions for error handling and validation
 const handleError = (error: any, options: { showUserMessage?: boolean; context?: string } = {}) => {
-    console.error(`Error in ${options.context || 'Unknown'}:`, error);
     appLogger.error(`Error in ${options.context || 'Unknown'}:`, error.message || error);
     if (options.showUserMessage) {
         // You could add toast notification here if needed
-        console.warn('User should be notified of error:', error.message || error);
     }
 };
 
 const handleAIServiceError = (error: any, context: string) => {
-    console.error(`AI Service Error in ${context}:`, error);
     appLogger.error(`AI Service Error in ${context}:`, error.message || error);
 };
 
@@ -1447,16 +1443,13 @@ const StoryboardPage: React.FC<{
         }, intervalTimeMs);
 
         try {
-            console.log('🎬 Starting storyboard generation...');
-            console.log('Script:', script.substring(0, 200) + '...');
-            console.log('Style:', storyboardStyle);
-            console.log('Instructions:', customInstructions);
+
             
             let result;
             try {
                 result = await generateStoryboard(script, storyboardStyle, customInstructions.trim());
             } catch (aiError) {
-                console.warn('⚠️ AI generation failed, creating fallback sample data:', aiError);
+
                 
                 // Create sample data as fallback
                 result = [
@@ -1493,9 +1486,7 @@ const StoryboardPage: React.FC<{
                 ];
             }
             
-            console.log('📝 Storyboard generation result:', result);
-            console.log('Result length:', result?.length);
-            console.log('First item:', result?.[0]);
+
 
             if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
             
@@ -1514,7 +1505,7 @@ const StoryboardPage: React.FC<{
             });
             setStoryboard(result);
             
-            console.log('✅ Storyboard state updated successfully');
+
         } catch (error) {
             if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
             appLogger.error('Storyboard generation error:', error);
@@ -1857,7 +1848,7 @@ const StoryboardPage: React.FC<{
                                                                         await navigator.clipboard.writeText(formattedPrompt);
                                                                         toast.success(`Copied prompt for ${model.name}!`);
                                                                     } catch (error) {
-                                                                        console.error('Failed to copy prompt:', error);
+
                                                                         toast.error('Failed to copy prompt. Please try again.');
                                                                     }
                                                                     
@@ -2470,7 +2461,7 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
     const handleSetTimelineItems = useCallback((newItems: AnyTimelineItem[]) => {
         // Performance optimization: Limit timeline items to prevent memory issues
         if (newItems.length > MAX_TIMELINE_ITEMS) {
-            console.warn(`⚠️ Timeline items exceeded limit (${MAX_TIMELINE_ITEMS}). Keeping first ${MAX_TIMELINE_ITEMS} items.`);
+
             newItems = newItems.slice(0, MAX_TIMELINE_ITEMS);
         }
         

@@ -41,7 +41,6 @@ export class GeminiAudioProvider implements IAudioProvider {
     this.config = config;
     this.client = new GoogleGenAI({ apiKey: config.apiKey });
     this.initialized = true;
-    console.log('[Gemini Audio Provider] Initialized successfully');
   }
 
   validateRequest(req: AudioRequest): ValidationResult {
@@ -97,7 +96,6 @@ export class GeminiAudioProvider implements IAudioProvider {
     const correlationId = `gemini-audio-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      console.log('[Gemini Audio Provider] Generating audio...', {
         text: req.text.substring(0, 100),
         mode: req.mode,
         duration: req.duration,
@@ -128,7 +126,6 @@ export class GeminiAudioProvider implements IAudioProvider {
         provider_raw: { correlationId, fullPrompt }
       };
 
-      console.log('[Gemini Audio Provider] Audio generated successfully', {
         latencyMs,
         duration_ms: audioResponse.duration_ms,
         correlationId
@@ -138,7 +135,6 @@ export class GeminiAudioProvider implements IAudioProvider {
     } catch (error: any) {
       const latencyMs = Date.now() - startTime;
 
-      console.error('[Gemini Audio Provider] Generation error:', error);
 
       throw this.createError(
         'GENERATION_ERROR',
@@ -221,7 +217,6 @@ Make it optimized for AI audio generation.`;
       });
       const enhancedDescription = result?.text || prompt;
 
-      console.log('[Gemini Audio Provider] Enhanced audio description created', {
         correlationId,
         descriptionLength: enhancedDescription.length
       });
@@ -395,7 +390,6 @@ Make it optimized for AI audio generation.`;
     this.config = null;
     this.client = null;
     this.initialized = false;
-    console.log('[Gemini Audio Provider] Disposed');
   }
 
   private categorizeError(error: any): ErrorKind {

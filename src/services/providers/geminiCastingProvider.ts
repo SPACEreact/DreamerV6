@@ -27,7 +27,6 @@ export class GeminiCastingProvider implements ICastingProvider {
   private initialized: boolean = false;
 
   async init(config: CastingProviderConfig): Promise<void> {
-    console.log('[Gemini Casting Provider] Initializing...');
     
     if (!config.apiKey) {
       throw new Error('Gemini Casting Provider requires API key');
@@ -52,7 +51,6 @@ export class GeminiCastingProvider implements ICastingProvider {
     }
 
     this.initialized = true;
-    console.log('[Gemini Casting Provider] Initialized successfully');
   }
 
   async generateCasting(
@@ -78,7 +76,6 @@ export class GeminiCastingProvider implements ICastingProvider {
       // Build comprehensive prompt
       const prompt = this.buildCastingPrompt(request);
 
-      console.log('[Gemini Casting Provider] Sending request', {
         requestId,
         characterName: request.character.name,
         model: this.config.model
@@ -141,7 +138,6 @@ export class GeminiCastingProvider implements ICastingProvider {
         progress: 100
       });
 
-      console.log('[Gemini Casting Provider] Casting generated successfully', {
         requestId,
         recommendationCount: castingResponse.recommendations.length,
         generationTime: castingResponse.metadata.generationTime
@@ -150,7 +146,6 @@ export class GeminiCastingProvider implements ICastingProvider {
       return castingResponse;
 
     } catch (error) {
-      console.error('[Gemini Casting Provider] Generation failed:', error);
       
       this.updateProgress(onProgress, {
         providerId: this.id,
@@ -262,7 +257,6 @@ IMPORTANT: Return ONLY a valid JSON object with this exact structure (no markdow
       // Extract JSON object
       const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        console.warn('[Gemini Casting Provider] No JSON found in response');
         return this.createFallbackResponse(request);
       }
 
@@ -270,7 +264,6 @@ IMPORTANT: Return ONLY a valid JSON object with this exact structure (no markdow
 
       // Validate the structure
       if (!parsed.recommendations || !Array.isArray(parsed.recommendations)) {
-        console.warn('[Gemini Casting Provider] Invalid recommendations structure');
         return this.createFallbackResponse(request);
       }
 
@@ -294,7 +287,6 @@ IMPORTANT: Return ONLY a valid JSON object with this exact structure (no markdow
         }
       };
     } catch (error) {
-      console.error('[Gemini Casting Provider] Failed to parse response:', error);
       return this.createFallbackResponse(request);
     }
   }
@@ -385,7 +377,6 @@ IMPORTANT: Return ONLY a valid JSON object with this exact structure (no markdow
 
       return HealthStatus.DEGRADED;
     } catch (error) {
-      console.error('[Gemini Casting Provider] Health check failed:', error);
       return HealthStatus.DOWN;
     }
   }
