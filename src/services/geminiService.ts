@@ -633,13 +633,13 @@ const generateStoryboardWithRetry = async (
             ? `\n\nCUSTOM INSTRUCTIONS:\n${customInstructions}\n\nPlease incorporate these specific instructions into your storyboard generation, adjusting the visual style, composition, lighting, and overall approach accordingly while maintaining the core narrative.`
             : '';
 
-        // Optimized prompts with 70% token reduction
+        // Simplified prompts for better reliability
         const prompt = style === 'explainer' 
             ? `Generate explainer video storyboard:
 • Each shot = 3-3.5 seconds narration
 • Focus: clean, simple visuals that illustrate narration
 • Style: modern illustrations (not photorealism)
-• Avoid complex cinematic jargon${instructionsSection ? `\nCUSTOM INSTRUCTIONS:\n${customInstructions}\n` : ''}
+• Avoid complex cinematic jargon${instructionsSection}
 
 SCRIPT:
 ${script}`
@@ -647,7 +647,7 @@ ${script}`
 • Each shot = 2.5-3 seconds screen time
 • Break long lines into multiple shots
 • Include: camera movements, framing, composition, lighting mood
-• Use industry-standard cinematography terms${instructionsSection ? `\nCUSTOM INSTRUCTIONS:\n${customInstructions}\n` : ''}
+• Use industry-standard cinematography terms${instructionsSection}
 
 SCRIPT:
 ${script}`;
@@ -655,9 +655,7 @@ ${script}`;
         // Dynamic token budgeting - intelligent allocation
         const estimatedTokens = tokenBudgetingSystem.estimateTokens(script, style);
         const actualMaxTokens = Math.min(estimatedTokens, maxTokens);
-        
 
-        
         const response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
             contents: prompt,
@@ -691,29 +689,33 @@ ${script}`;
         const parsedData = extractJSON(responseText);
 
         // Ensure the output is always an array
-        if (Array.isArray(parsedData)) {
-
+        if (Array.isArray(parsedData) && parsedData.length > 0) {
             return parsedData;
         } else if (typeof parsedData === 'object' && parsedData !== null) {
-
             return [parsedData];
         }
 
         throw new Error("Failed to parse storyboard: result was not an array or object.");
 
     } catch (error) {
+        geminiLogger.error(`Storyboard generation failed on attempt ${attempt}:`, sanitizeErrorMessage(error));
+        
         // Smart retry logic with intelligent token reduction
         if (attempt < 3) {
-            const retryPlan = tokenBudgetingSystem.calculateRetryTokens(attempt, error, maxTokens);
-            if (retryPlan && retryPlan.shouldRetry) {
-
-                return generateStoryboardWithRetry(script, style, customInstructions, retryPlan.tokens, attempt + 1);
+            try {
+                const retryPlan = tokenBudgetingSystem.calculateRetryTokens(attempt, error, maxTokens);
+                if (retryPlan && retryPlan.shouldRetry) {
+                    geminiLogger.info(`Retrying storyboard generation with reduced tokens: ${retryPlan.tokens}`);
+                    return generateStoryboardWithRetry(script, style, customInstructions, retryPlan.tokens, attempt + 1);
+                }
+            } catch (retryError) {
+                geminiLogger.error('Retry planning failed:', sanitizeErrorMessage(retryError));
             }
         }
         
-        // Enhanced error message with optimized context
+        // Enhanced error message
         const contextError = new Error(
-            `Failed to generate storyboard: ${error.message}. ` +
+            `Storyboard generation failed after ${attempt} attempts: ${error.message}. ` +
             `Optimized tokens: ${maxTokens}. Try simpler script or wait for quota reset.`
         );
         
