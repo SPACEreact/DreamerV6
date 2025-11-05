@@ -334,13 +334,13 @@ export const getKnowledgeBasedSuggestions = async (
         
         const aiResponse = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
-            contents: `Based on this context, provide 2-3 specific suggestions for: "${currentQuestion}"
+            contents: `Based on this context, provide 2-3 specific visual concepts for: "${currentQuestion}"
 
-Focus on technical cinematography techniques: camera angles, lighting setups, composition rules, framing methods, visual aesthetics, and filming approaches. Keep suggestions concise and directly actionable.
+Focus on creative visual storytelling ideas and visual concepts (not technical advice). Think about specific visual scenarios, atmospheric elements, mood-setting visuals, or creative visual approaches. Keep suggestions concise and directly actionable.
 
 Context: ${enhancedContext}
 
-Provide your cinematography suggestions:`,
+Provide your creative visual concepts:`,
         });
 
         const aiSuggestions = extractCleanSuggestions(aiResponse.text);
