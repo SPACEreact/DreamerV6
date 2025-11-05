@@ -246,71 +246,75 @@ export class HuggingFaceService {
       const analysis = await this.analyzeNarrative(context);
       const suggestions: string[] = [];
 
-      // Generate intelligent suggestions based on question type and context
+      // Generate specific, actionable suggestions based on question type and context
       switch (questionType) {
         case 'protagonist':
-          suggestions.push('Consider their background and formative experiences');
-          suggestions.push('Think about what makes them unique');
-          suggestions.push('Explore their internal contradictions');
+          suggestions.push('A disillusioned cop questioning their career choice');
+          suggestions.push('A young artist struggling to find their voice');
+          suggestions.push('A parent dealing with an empty nest syndrome');
           if (analysis.narrativeElements.includes('character development')) {
-            suggestions.push('Focus on their character arc potential');
+            suggestions.push('A mentor learning from their mistakes');
           }
           break;
 
         case 'coreWant':
-          suggestions.push('Make it urgent and specific');
-          suggestions.push('Connect it to their deeper needs');
-          suggestions.push('Consider what they think they want vs what they need');
+          suggestions.push('To prove they are not like their parent');
+          suggestions.push('To save a family member from danger');
+          suggestions.push('To achieve recognition they were denied');
           if (analysis.genre === 'romance') {
-            suggestions.push('Think about love as both want and need');
+            suggestions.push('To find true love after heartbreak');
           }
           break;
 
         case 'centralConflict':
-          suggestions.push('Make the opposition personal');
-          suggestions.push('Ensure compromise is impossible');
-          suggestions.push('Create moral complexity');
+          suggestions.push('Protecting a secret vs. telling the truth');
+          suggestions.push('Choosing career vs. family obligations');
+          suggestions.push('Fighting for justice in a corrupt system');
           if (analysis.visualCues.includes('intense lighting')) {
-            suggestions.push('Consider external obstacles that mirror internal ones');
+            suggestions.push('Internal struggle against external pressure');
           }
           break;
 
         case 'setting':
-          suggestions.push('Let the setting reflect the theme');
-          suggestions.push('Use location to create conflict');
-          suggestions.push('Consider how time period affects the story');
+          suggestions.push('A small town where everyone knows everyone');
+          suggestions.push('A bustling city that never sleeps');
+          suggestions.push('An isolated location that creates tension');
           break;
 
         case 'emotionalTone':
-          suggestions.push('Balance contrasts for depth');
-          suggestions.push('Consider the audience\'s emotional journey');
-          suggestions.push('Use mood to support the story');
+          suggestions.push('Bittersweet - hope mixed with melancholy');
+          suggestions.push('Suspenseful - tension building to climax');
+          suggestions.push('Whimsical - light-hearted with hidden depth');
           if (analysis.genre === 'horror') {
-            suggestions.push('Build tension through atmosphere');
+            suggestions.push('Creepy - unease that builds to terror');
           }
           break;
 
         case 'stakes':
-          suggestions.push('Make failure personally devastating');
-          suggestions.push('Consider both external and internal consequences');
-          suggestions.push('Make the cost of inaction clear');
+          suggestions.push('Losing everything they hold dear');
+          suggestions.push('Their actions affecting innocent people');
+          suggestions.push('An irreversible choice that defines them');
           break;
 
         case 'turningPoint':
-          suggestions.push('Change everything the character believes');
-          suggestions.push('Force an impossible choice');
-          suggestions.push('Create irreversible consequences');
+          suggestions.push('Discovering they have a terminal illness');
+          suggestions.push('Learning their parent is not who they thought');
+          suggestions.push('Realizing the person they trusted is the enemy');
           break;
 
         default:
-          suggestions.push('Focus on clarity and specificity');
-          suggestions.push('Consider the story\'s central theme');
-          suggestions.push('Think about visual storytelling opportunities');
+          suggestions.push('A character with a hidden talent');
+          suggestions.push('A situation with escalating consequences');
+          suggestions.push('A relationship that changes everything');
       }
 
-      return suggestions;
+      return suggestions.slice(0, 3); // Return top 3 suggestions
     } catch (error) {
-      return ['Focus on clear storytelling', 'Consider character motivation', 'Think about visual elements'];
+      return [
+        'A character facing their biggest fear',
+        'A situation where choices have consequences',
+        'A relationship that tests loyalty'
+      ];
     }
   }
 
