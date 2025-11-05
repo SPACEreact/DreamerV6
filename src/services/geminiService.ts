@@ -24,24 +24,64 @@ const NARRATIVE_BLOCKLIST = [
 ];
 
 const filterCinematographySuggestions = (suggestions: string[]): string[] => {
-    const filtered = suggestions.filter(suggestion => {
+    return suggestions.filter(suggestion => {
         const lower = suggestion.toLowerCase();
         if (NARRATIVE_BLOCKLIST.some(term => lower.includes(term))) {
             return false;
         }
         return CINEMATOGRAPHY_KEYWORDS.some(keyword => lower.includes(keyword));
     });
+};
 
-    if (filtered.length > 0) {
-        return filtered;
+const DEFAULT_CINEMATOGRAPHY_SUGGESTIONS = [
+    'Lock a 35mm lens at eye level and dolly in slowly to let the performance swell into the frame.',
+    'Motivate the key light from a practical source, then feather a soft fill to retain texture in the shadows.',
+    'Stage the action in foreground, midground, and background layers so the blocking paints depth through the shot.',
+    'Float the camera on a controlled handheld sway to translate the emotional turbulence into motion.',
+    'Balance warm key light with a cool rim to sculpt silhouettes and echo the scene\'s tonal contrast.'
+];
+
+const enforceCinematographyFocus = async (
+    rawSuggestions: string[],
+    context: string,
+    currentQuestion: string
+): Promise<string[]> => {
+    const alreadyFocused = filterCinematographySuggestions(rawSuggestions);
+    if (alreadyFocused.length > 0) {
+        return alreadyFocused.slice(0, 5);
     }
 
-    const narrativeFiltered = suggestions.filter(suggestion => {
-        const lower = suggestion.toLowerCase();
-        return !NARRATIVE_BLOCKLIST.some(term => lower.includes(term));
-    });
+    if (rawSuggestions.length > 0) {
+        try {
+            const formattedList = rawSuggestions
+                .map((suggestion, index) => `${index + 1}. ${suggestion}`)
+                .join('\n');
 
-    return narrativeFiltered.length > 0 ? narrativeFiltered : suggestions;
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.0-flash-exp',
+                contents: `These suggestions drift into narrative ideation. Rewrite each one as a cinematography-specific directive focused on camera, lensing, lighting, composition, or blocking.
+
+Question: "${currentQuestion}"
+
+Context:
+${context}
+
+Original suggestions:
+${formattedList}
+
+Return 3-5 bullet points that each stay strictly within cinematography craft and avoid plot or character development.`,
+            });
+
+            const refocused = filterCinematographySuggestions(extractCleanSuggestions(response.text));
+            if (refocused.length > 0) {
+                return refocused.slice(0, 5);
+            }
+        } catch (refocusError) {
+            geminiLogger.warn('Unable to refocus suggestions on cinematography:', sanitizeErrorMessage(refocusError));
+        }
+    }
+
+    return DEFAULT_CINEMATOGRAPHY_SUGGESTIONS.slice(0, 5);
 };
 
 // Helper function to extract clean suggestions - balanced filtering
@@ -258,7 +298,7 @@ export const getAISuggestions = async (context: string, currentQuestion: string,
         // Use HuggingFace for local analysis to enhance context
         await huggingFaceService.initialize();
         const narrativeAnalysis = await huggingFaceService.analyzeNarrative(context);
-        
+
         // Enhance context with HuggingFace analysis
         const enhancedContext = `${context}\n\nNARRATIVE ANALYSIS (Local AI):\nGenre: ${narrativeAnalysis.genre}\nEmotional Tone: ${narrativeAnalysis.emotionalTone}\nVisual Cues: ${narrativeAnalysis.visualCues.join(', ')}\nNarrative Elements: ${narrativeAnalysis.narrativeElements.join(', ')}`;
 
@@ -280,8 +320,7 @@ Respond with cinematography suggestions only:`,
 
         const suggestionsText = response.text;
         const suggestions = extractCleanSuggestions(suggestionsText);
-        const focusedSuggestions = filterCinematographySuggestions(suggestions);
-        return focusedSuggestions.slice(0, 5);
+        return await enforceCinematographyFocus(suggestions, enhancedContext, currentQuestion);
     } catch (error) {
         handleAIServiceError(error, 'Get AI Suggestions');
         return [];
@@ -375,15 +414,17 @@ Respond with cinematography-focused ideas only:`,
         });
 
         const aiSuggestions = extractCleanSuggestions(aiResponse.text);
-        
+
         // Combine knowledge-based and AI suggestions and enforce cinematography focus
-        const allSuggestions = filterCinematographySuggestions([
+        const combinedSuggestions = [
             ...knowledgeSuggestions,
             ...aiSuggestions
-        ]).slice(0, 5);
-        
+        ];
+
+        const focusedSuggestions = await enforceCinematographyFocus(combinedSuggestions, enhancedContext, currentQuestion);
+
         return {
-            suggestions: allSuggestions,
+            suggestions: focusedSuggestions,
             relevantKnowledge
         };
     } catch (error) {
