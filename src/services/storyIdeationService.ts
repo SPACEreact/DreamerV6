@@ -126,19 +126,17 @@ export class StoryIdeationService {
           doc.name.toLowerCase().includes(prompt.toLowerCase())
         )
         .map(doc => {
-          const { extractedKnowledge } = doc;
-          const themeHighlights = Array.isArray(extractedKnowledge?.themes)
-            ? (extractedKnowledge?.themes ?? []).slice(0, 2)
-            : [];
-          const techniqueHighlights = Array.isArray(extractedKnowledge?.techniques)
-            ? (extractedKnowledge?.techniques ?? []).slice(0, 2)
-            : [];
+          const themes = doc.extractedKnowledge?.themes;
+          const techniques = doc.extractedKnowledge?.techniques;
+          const highlightSource = Array.isArray(themes) && themes.length
+            ? themes.slice(0, 2)
+            : Array.isArray(techniques) && techniques.length
+              ? techniques.slice(0, 2)
+              : null;
 
-          const highlight = themeHighlights.length > 0
-            ? themeHighlights.join(', ')
-            : (techniqueHighlights.length > 0 ? techniqueHighlights.join(', ') : 'Key insights');
+          const highlightText = highlightSource?.join(', ') || 'Key insights';
 
-          return `📚 ${doc.name}: ${highlight}...`;
+          return `📚 ${doc.name}: ${highlightText}...`;
         })
     );
   }
