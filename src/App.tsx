@@ -1654,28 +1654,89 @@ const StoryboardPage: React.FC<{
                         </p>
                     )}
                     
-                    {/* Story Ideation Button */}
-                    <div className="mb-6">
-                        <motion.button
-                            onClick={() => setShowStoryIdeation(true)}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="w-full p-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg transition-all flex items-center justify-center space-x-2 mb-3"
+                    <div className="mb-8 grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                        <motion.div
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.05 }}
+                            className="bg-gray-900/70 border border-amber-500/20 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4"
                         >
-                            <WandSparkles className="w-5 h-5" />
-                            <span>🎭 Get Story Ideas (AI-Powered)</span>
-                        </motion.button>
-                        <p className="text-xs text-gray-400 text-center">
-                            Need help developing your story? Let Dreamer guide you through smart questions to build compelling characters, conflict, and narrative.
-                        </p>
+                            <div className="space-y-1">
+                                <h2 className="text-lg sm:text-xl font-semibold text-white">Ready to Generate Your Storyboard?</h2>
+                                <p className="text-sm text-gray-400">
+                                    Dreamer will break your script into cinematic shots with composition, camera, and lighting suggestions tailored to your tone.
+                                </p>
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
+                                <motion.button
+                                    onClick={handleGenerateStoryboard}
+                                    disabled={isLoading || !script.trim()}
+                                    whileHover={!isLoading && script.trim() ? { scale: 1.02 } : undefined}
+                                    whileTap={!isLoading && script.trim() ? { scale: 0.98 } : undefined}
+                                    className={`w-full sm:w-auto px-8 py-4 text-base font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg shadow-lg shadow-purple-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 transition-all duration-200 ${
+                                        !script.trim() ? 'opacity-60' : ''
+                                    } ${
+                                        isLoading ? 'cursor-wait' : 'cursor-pointer hover:from-purple-700 hover:to-indigo-700'
+                                    }`}
+                                    style={{
+                                        background: isLoading
+                                            ? 'linear-gradient(to right, #8b5cf6, #6366f1)'
+                                            : !script.trim()
+                                                ? 'linear-gradient(to right, #6b7280, #4b5563)'
+                                                : 'linear-gradient(to right, #9333ea, #4f46e5)'
+                                    }}
+                                >
+                                    {isLoading && <div className="w-5 h-5 animate-spin rounded-full border-2 border-gray-300 border-t-white" />}
+                                    <span>
+                                        {!script.trim()
+                                            ? 'Enter Script First'
+                                            : isLoading
+                                                ? 'Generating...'
+                                                : 'Generate Storyboard'
+                                        }
+                                    </span>
+                                </motion.button>
+                                <motion.button
+                                    onClick={() => setStage('landing')}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    className="w-full sm:w-auto px-6 py-3 text-sm font-medium rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors"
+                                >
+                                    Back
+                                </motion.button>
+                            </div>
+                        </motion.div>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="bg-gray-900/40 border border-dashed border-purple-500/30 rounded-xl p-5 flex flex-col justify-between gap-3"
+                        >
+                            <div className="space-y-2">
+                                <h3 className="text-base font-semibold text-purple-200">Need Story Inspiration?</h3>
+                                <p className="text-sm text-gray-400">
+                                    Explore character arcs, themes, and twists with our guided Story Ideation flow before you generate visuals.
+                                </p>
+                            </div>
+                            <motion.button
+                                onClick={() => setShowStoryIdeation(true)}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                                className="w-full px-6 py-3 text-sm font-medium rounded-lg border border-purple-400/50 text-purple-200 hover:bg-purple-500/10 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <WandSparkles className="w-5 h-5" />
+                                <span>Get Story Ideas</span>
+                            </motion.button>
+                        </motion.div>
                     </div>
-                    
+
                     <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-300 mb-2">
                             Custom Instructions (Optional)
                         </label>
-                        <textarea 
-                            value={customInstructions} 
+                        <textarea
+                            value={customInstructions}
                             onChange={e => setCustomInstructions(e.target.value)} 
                             placeholder="Add specific instructions for your storyboard... (e.g., 'Use warmer color palette', 'Focus on close-up emotional shots', 'Include more action sequences', 'Emphasize the protagonist's perspective')" 
                             className="w-full h-24 p-3 bg-gray-900 border border-gray-800 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none resize-none" 
@@ -1685,36 +1746,6 @@ const StoryboardPage: React.FC<{
                         </p>
                     </div>
                     
-                    <div className="flex justify-center space-x-4">
-                        <motion.button onClick={() => setStage('landing')} className="px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg">Back</motion.button>
-                        <motion.button 
-                            onClick={handleGenerateStoryboard} 
-                            disabled={isLoading || !script.trim()} 
-                            className={`px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition-all duration-200 ${
-                                !script.trim() ? 'opacity-60' : ''
-                            } ${
-                                isLoading ? 'cursor-wait' : 'cursor-pointer hover:from-purple-700 hover:to-indigo-700'
-                            }`}
-                            style={{
-                                background: isLoading 
-                                    ? 'linear-gradient(to right, #8b5cf6, #6366f1)' 
-                                    : !script.trim() 
-                                        ? 'linear-gradient(to right, #6b7280, #4b5563)' 
-                                        : 'linear-gradient(to right, #9333ea, #4f46e5)'
-                            }}
-                        >
-                            {isLoading && <div className="w-5 h-5 animate-spin rounded-full border-2 border-gray-300 border-t-white" />}
-                            <span>
-                                {!script.trim() 
-                                    ? 'Enter Script First' 
-                                    : isLoading 
-                                        ? 'Generating...' 
-                                        : 'Generate Storyboard'
-                                }
-                            </span>
-                        </motion.button>
-                    </div>
-
                     {progress && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3">
                             <div className="flex items-center justify-between text-sm text-gray-400">

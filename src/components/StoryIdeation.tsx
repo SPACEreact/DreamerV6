@@ -198,7 +198,8 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
 
   const QuestionIcon = getQuestionIcon(currentQuestion.category);
 
-  if (!shouldShowCurrentQuestion) {
+  // Only auto-skip if we're past the first question and the current one shouldn't be shown
+  if (currentQuestionIndex > 0 && !shouldShowCurrentQuestion) {
     nextQuestion();
     return null;
   }

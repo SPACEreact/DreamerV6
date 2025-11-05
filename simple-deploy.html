@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DreamerV6 - Script to Storyboard Preview</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: #0a0a0a; 
+            color: #ffffff;
+        }
+        .storyboard-shot {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .shot-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .shot-detail {
+            font-size: 14px;
+        }
+        .shot-label {
+            color: #f59e0b;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .shot-value {
+            color: #d1d5db;
+        }
+        .shot-description {
+            padding-top: 8px;
+            border-top: 1px solid #374151;
+            margin-top: 12px;
+        }
+        .copy-btn {
+            background: rgba(245, 158, 11, 0.2);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            color: #f59e0b;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .copy-btn:hover {
+            background: rgba(245, 158, 11, 0.3);
+        }
+        .shot-number {
+            color: #6b7280;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+        .screenplay-line {
+            font-family: 'Courier New', monospace;
+            color: #9ca3af;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        .progress-bar {
+            background: linear-gradient(to right, #f59e0b, #ea580c);
+            height: 8px;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        function App() {
+            const [script, setScript] = useState('');
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [storyboard, setStoryboard] = useState([]);
+            const [copiedShot, setCopiedShot] = useState(null);
+
+            // Mock storyboard data to show the current layout
+            const mockStoryboard = [
+                {
+                    screenplayLine: "INT. COFFEE SHOP - DAY\nSarah sits alone at a corner table, staring at her laptop screen.",
+                    shotDetails: {
+                        shotType: "Medium Shot",
+                        cameraAngle: "Eye Level",
+                        cameraMovement: "Static",
+                        description: "Sarah in focus with soft natural light streaming through the window. Her reflection slightly visible on the laptop screen.",
+                        lightingMood: "Soft Natural"
+                    }
+                },
+                {
+                    screenplayLine: "CUT TO:\nCLOSE-UP on Sarah's face as she realizes something important.",
+                    shotDetails: {
+                        shotType: "Close-Up",
+                        cameraAngle: "Slight Low Angle",
+                        cameraMovement: "Rack Focus",
+                        description: "Eyes wide with realization, shallow depth of field with background softly blurred. Key light from practical window source.",
+                        lightingMood: "Chiaroscuro Contrast"
+                    }
+                },
+                {
+                    screenplayLine: "MEDIUM SHOT reveals Sarah standing and gathering her things quickly.",
+                    shotDetails: {
+                        shotType: "Medium Shot",
+                        cameraAngle: "Eye Level",
+                        cameraMovement: "Handheld Sway",
+                        description: "Sarah's urgent movements captured with slight handheld movement to convey tension. Warm key light balanced with cool shadows.",
+                        lightingMood: "Warm Key, Cool Rim"
+                    }
+                }
+            ];
+
+            const handleGenerateStoryboard = () => {
+                setIsGenerating(true);
+                // Simulate API call
+                setTimeout(() => {
+                    setStoryboard(mockStoryboard);
+                    setIsGenerating(false);
+                }, 2000);
+            };
+
+            const copyPrompt = (index) => {
+                const shot = storyboard[index];
+                if (shot) {
+                    const promptText = `${shot.shotDetails.shotType} ${shot.shotDetails.cameraAngle}. ${shot.shotDetails.description}. ${shot.shotDetails.lightingMood} lighting. ${shot.shotDetails.cameraMovement} camera movement.`;
+                    navigator.clipboard.writeText(promptText);
+                    setCopiedShot(index);
+                    setTimeout(() => setCopiedShot(null), 2000);
+                }
+            };
+
+            return (
+                <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: '700', textAlign: 'center', marginBottom: '32px', color: '#f59e0b' }}>
+                        DreamerV6 - Script to Storyboard Preview
+                    </h1>
+                    
+                    <div style={{ background: '#1a1a1a', borderRadius: '12px', padding: '24px', marginBottom: '32px' }}>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: '600', marginBottom: '16px' }}>Script Input</h2>
+                        <textarea
+                            value={script}
+                            onChange={(e) => setScript(e.target.value)}
+                            placeholder="Enter your script here..."
+                            style={{
+                                width: '100%',
+                                height: '120px',
+                                background: '#0a0a0a',
+                                border: '1px solid #333',
+                                borderRadius: '8px',
+                                padding: '12px',
+                                color: '#ffffff',
+                                fontFamily: 'monospace',
+                                resize: 'vertical'
+                            }}
+                        />
+                        <button
+                            onClick={handleGenerateStoryboard}
+                            disabled={!script.trim() || isGenerating}
+                            style={{
+                                marginTop: '16px',
+                                padding: '12px 24px',
+                                background: script.trim() && !isGenerating ? '#f59e0b' : '#333',
+                                color: script.trim() && !isGenerating ? '#000' : '#666',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontWeight: '600',
+                                cursor: script.trim() && !isGenerating ? 'pointer' : 'not-allowed',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {isGenerating ? 'Generating Storyboard...' : 'Generate Storyboard'}
+                        </button>
+                    </div>
+
+                    {isGenerating && (
+                        <div style={{ background: '#1a1a1a', borderRadius: '12px', padding: '24px', marginBottom: '32px' }}>
+                            <div style={{ marginBottom: '12px' }}>
+                                <div className="progress-bar" style={{ width: '75%' }}></div>
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#6b7280', display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Shots: 3</span>
+                                <span>Status: Generating</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {storyboard.length > 0 && !isGenerating && (
+                        <div>
+                            <h2 style={{ fontSize: '2rem', fontWeight: '700', textAlign: 'center', marginBottom: '32px' }}>
+                                Generated Storyboard
+                            </h2>
+                            <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '8px' }}>
+                                {storyboard.map((shot, index) => (
+                                    <div key={index} className="storyboard-shot">
+                                        <div className="shot-number">Shot {index + 1}</div>
+                                        <div className="screenplay-line">{shot.screenplayLine}</div>
+                                        
+                                        <div style={{ background: 'rgba(31, 31, 31, 0.5)', borderRadius: '8px', padding: '12px', marginBottom: '16px' }}>
+                                            <div className="shot-grid">
+                                                <div className="shot-detail">
+                                                    <div className="shot-label">Shot Type</div>
+                                                    <div className="shot-value">{shot.shotDetails.shotType}</div>
+                                                </div>
+                                                <div className="shot-detail">
+                                                    <div className="shot-label">Camera Angle</div>
+                                                    <div className="shot-value">{shot.shotDetails.cameraAngle}</div>
+                                                </div>
+                                                <div className="shot-detail">
+                                                    <div className="shot-label">Camera Movement</div>
+                                                    <div className="shot-value">{shot.shotDetails.cameraMovement}</div>
+                                                </div>
+                                                <div className="shot-detail">
+                                                    <div className="shot-label">Lighting Mood</div>
+                                                    <div className="shot-value">{shot.shotDetails.lightingMood}</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="shot-description">
+                                                <div className="shot-label">Description</div>
+                                                <div className="shot-value" style={{ fontSize: '14px', lineHeight: '1.5' }}>
+                                                    {shot.shotDetails.description}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                            <button 
+                                                className="copy-btn"
+                                                onClick={() => copyPrompt(index)}
+                                            >
+                                                {copiedShot === index ? '✓ Copied!' : 'Copy Prompt'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
