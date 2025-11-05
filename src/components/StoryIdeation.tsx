@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Lightbulb,
@@ -47,6 +47,13 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
 
   const shouldShowCurrentQuestion = StoryIdeationService.shouldShowQuestion(currentQuestion.id, context);
 
+  const answersMap = useMemo(() => {
+    return questions.reduce((acc, q) => {
+      acc[q.id] = q.answer;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [questions]);
+
   useEffect(() => {
     setKnowledgeInsights(StoryIdeationService.getRelevantKnowledge(currentQuestion.id));
   }, [currentQuestion.id]);
@@ -84,8 +91,6 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
         return acc;
       }, {} as Record<string, string>);
 
-      const nextQuestion = storyIdeationQuestions[currentQuestionIndex + 1];
-      if (nextQuestion) {
         const smartSuggestions = await StoryIdeationService.generateSmartSuggestions(
           nextQuestion.id,
           contextToUse,
@@ -150,26 +155,22 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
     if (currentQuestionIndex < storyIdeationQuestions.length - 1) {
       // Skip questions that shouldn't be shown
       let nextIndex = currentQuestionIndex + 1;
-      while (nextIndex < storyIdeationQuestions.length && 
+      while (nextIndex < storyIdeationQuestions.length &&
              !StoryIdeationService.shouldShowQuestion(storyIdeationQuestions[nextIndex].id, context)) {
         nextIndex++;
       }
       setCurrentQuestionIndex(nextIndex);
-      setSuggestions([]);
-      setKnowledgeInsights([]);
     }
   };
 
   const prevQuestion = () => {
     if (currentQuestionIndex > 0) {
       let prevIndex = currentQuestionIndex - 1;
-      while (prevIndex >= 0 && 
+      while (prevIndex >= 0 &&
              !StoryIdeationService.shouldShowQuestion(storyIdeationQuestions[prevIndex].id, context)) {
         prevIndex--;
       }
       setCurrentQuestionIndex(prevIndex >= 0 ? prevIndex : 0);
-      setSuggestions([]);
-      setKnowledgeInsights([]);
     }
   };
 
