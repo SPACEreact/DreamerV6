@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "build:prod": "tsc -b && BUILD_MODE=prod vite build",
     "lint": "eslint .",
+    "test": "vitest",
     "preview": "vite preview",
     "install-deps": "npm install",
     "clean": "npm cache clean --force",
@@ -88,6 +89,7 @@
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.15.0",
     "vite": "^6.0.1",
-    "vite-plugin-source-identifier": "1.1.2"
+    "vite-plugin-source-identifier": "1.1.2",
+    "vitest": "^2.1.4"
   }
 }
