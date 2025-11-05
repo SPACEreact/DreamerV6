@@ -200,128 +200,6 @@ const AI_MODELS: AIModel[] = [
   }
 ];
 
-type KnowledgeSummary = {
-  doc: KnowledgeDocument;
-  summary: string;
-  score: number;
-};
-
-const flattenPromptData = (data: PromptData): string => {
-  if (!data) return '';
-  const pieces: string[] = [];
-  Object.values(data).forEach(value => {
-    if (Array.isArray(value)) {
-      pieces.push(value.filter(Boolean).join(' '));
-    } else if (typeof value === 'string') {
-      pieces.push(value);
-    } else if (typeof value === 'number') {
-      pieces.push(String(value));
-    } else if (typeof value === 'boolean' && value) {
-      pieces.push('true');
-    }
-  });
-  return pieces.join(' ').toLowerCase();
-};
-
-const summarizeKnowledgeDoc = (doc: KnowledgeDocument): string => {
-  const knowledge = doc?.extractedKnowledge;
-  const parts: string[] = [];
-
-  if (knowledge?.themes?.length) {
-    parts.push(`Themes: ${knowledge.themes.slice(0, 3).join(', ')}`);
-  }
-  if (knowledge?.visualStyles?.length) {
-    parts.push(`Visual: ${knowledge.visualStyles.slice(0, 3).join(', ')}`);
-  }
-  if (knowledge?.techniques?.length) {
-    parts.push(`Techniques: ${knowledge.techniques.slice(0, 3).join(', ')}`);
-  }
-
-  return parts.join(' | ') || 'Cinematic reference insight';
-};
-
-const selectRelevantKnowledgeDocs = (
-  docs: KnowledgeDocument[] = [],
-  data: PromptData,
-  limit = 3
-): KnowledgeSummary[] => {
-  if (!Array.isArray(docs) || docs.length === 0) {
-    return [];
-  }
-
-  const reference = flattenPromptData(data);
-  const scored = docs.map(doc => {
-    const knowledge = doc.extractedKnowledge || { themes: [], visualStyles: [], techniques: [], characters: [] };
-    const keywords = [
-      ...(knowledge.themes || []),
-      ...(knowledge.visualStyles || []),
-      ...(knowledge.techniques || []),
-      ...(knowledge.characters || [])
-    ]
-      .map(keyword => keyword.toLowerCase())
-      .filter(Boolean);
-
-    let score = 0;
-    keywords.forEach(keyword => {
-      if (reference.includes(keyword)) {
-        score += 2;
-      }
-    });
-
-    // Lightly prefer user-provided documents to keep suggestions personal
-    if (doc && !doc.id.startsWith('preloaded-')) {
-      score += 1;
-    }
-
-    return {
-      doc,
-      summary: summarizeKnowledgeDoc(doc),
-      score
-    };
-  });
-
-  scored.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    const aTime = a.doc?.uploadedAt ? new Date(a.doc.uploadedAt).getTime() : 0;
-    const bTime = b.doc?.uploadedAt ? new Date(b.doc.uploadedAt).getTime() : 0;
-    return bTime - aTime;
-  });
-
-  const filtered = scored.filter(item => item.score > 0);
-  const selected = (filtered.length > 0 ? filtered : scored).slice(0, limit);
-
-  return selected;
-};
-
-const formatKnowledgeHighlight = (summary: KnowledgeSummary): string => {
-  const title = summary.doc?.name ?? 'Knowledge Insight';
-  return `${title} → ${summary.summary}`;
-};
-
-const detectBase64MimeType = (data: string | undefined, fallback: string): string => {
-  if (!data) return fallback;
-  if (data.startsWith('/9j/')) return 'image/jpeg';
-  if (data.startsWith('iVBOR')) return 'image/png';
-  if (data.startsWith('PHN2Zy')) return 'image/svg+xml';
-  if (data.startsWith('R0lGOD')) return 'image/gif';
-  return fallback;
-};
-
-const truncateNarrativeText = (text: string, maxLength: number): string => {
-  if (!text) return '';
-  if (text.length <= maxLength) return text.trim();
-  const truncated = text.slice(0, maxLength);
-  return `${truncated.replace(/\s+\S*$/, '').trim()}…`;
-};
-
-type GeneratedContentEntry = {
-  images: { photoreal?: string; stylized?: string };
-  imageMimeTypes?: { photoreal?: string; stylized?: string };
-  enhancedPrompt?: string;
-  videoPrompt?: string;
-  status: 'idle' | 'loading' | 'error';
-};
-
 // Error Boundary Component for better error handling
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error?: Error}> {
   constructor(props: {children: React.ReactNode}) {
@@ -467,16 +345,6 @@ const formatValue = (value: string | string[] | boolean | undefined): string => 
     if (!value) return '';
     if (Array.isArray(value)) return value.join(', ');
     return String(value);
-};
-
-// Clean AI suggestion text by removing unwanted characters
-const cleanSuggestion = (text: string): string => {
-    return text
-        .replace(/["'"]/g, '') // Remove quotation marks
-        .replace(/\*/g, '') // Remove asterisks
-        .replace(/,/g, ' ') // Replace commas with spaces
-        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-        .trim();
 };
 
 const getCameraLinePosition = (height: string, angle: string): { x1: number; y1: number; x2: number; y2: number } => {
@@ -1082,19 +950,16 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
             .filter(q => q.id !== currentQuestion.id && promptData[q.id as keyof PromptData])
             .map(q => `${q.question}: ${formatValue(promptData[q.id as keyof PromptData])}`)
             .join('\n');
-
+        
         const knowledgeContext = `KNOWLEDGE BASE:\n` + (knowledgeDocs || []).filter(doc => doc).map(doc => `[${doc?.name ?? 'Unknown'}]: Themes: ${doc?.extractedKnowledge?.themes?.join(', ') || 'N/A'}. Techniques: ${doc?.extractedKnowledge?.techniques?.join(', ') || 'N/A'}`).join('\n');
         const storyContext = promptData.scriptText ? `\n\nSTORY SCRIPT:\n${promptData.scriptText}` : '';
         const fullContext = `${knowledgeContext}\n\nPREVIOUS ANSWERS:\n${previousAnswers}${storyContext}`;
-
-        const derivedKnowledgeSummaries = selectRelevantKnowledgeDocs(knowledgeDocs, promptData, 3);
-        const fallbackKnowledge = derivedKnowledgeSummaries.map(formatKnowledgeHighlight);
-
+        
         // Get enhanced knowledge-based suggestions
         try {
             const { suggestions, relevantKnowledge } = await getKnowledgeBasedSuggestions(
-                fullContext,
-                currentQuestion.question,
+                fullContext, 
+                currentQuestion.question, 
                 knowledgeDocs
             );
             
@@ -1117,19 +982,8 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
             }
             
             setAiSuggestions(suggestions);
-
-            const formattedRelevant = (relevantKnowledge || []).map(text => {
-                const [title, rest] = text.split(':');
-                if (rest) {
-                    return `${title.trim()} → ${rest.trim()}`;
-                }
-                return text;
-            });
-
-            const combinedInsights = [...formattedRelevant, ...fallbackKnowledge].filter(Boolean);
-            const uniqueInsights = Array.from(new Set(combinedInsights));
-            setKnowledgeInsights(uniqueInsights);
-
+            setKnowledgeInsights(relevantKnowledge);
+            
             // Also get local narrative analysis if HuggingFace is ready
             if (huggingFaceReady) {
                 const analysis = await huggingFaceService.analyzeNarrative(fullContext);
@@ -1139,9 +993,8 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
             appLogger.error('Enhanced suggestions failed, falling back to basic AI suggestions:', error);
             const suggestions = await getAISuggestions(fullContext, currentQuestion.question, knowledgeDocs);
             setAiSuggestions(suggestions);
-            setKnowledgeInsights(fallbackKnowledge);
         }
-
+        
         setIsLoadingAI(false);
     };
     
@@ -1214,18 +1067,17 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {(currentQuestion?.options || []).map((option) => { 
-                        const currentValue = promptData[currentQuestion.id as keyof PromptData];
-                        const cleanedOption = cleanSuggestion(option);
-                        const isSelected = multipleMode ? Array.isArray(currentValue) && currentValue.includes(cleanedOption) : formatValue(currentValue) === cleanedOption; 
+                        const currentValue = promptData[currentQuestion.id as keyof PromptData]; 
+                        const isSelected = multipleMode ? Array.isArray(currentValue) && currentValue.includes(option) : formatValue(currentValue) === option; 
                         return (
                           <motion.button 
                             key={option} 
                             whileHover={{ scale: 1.02 }} 
                             whileTap={{ scale: 0.98 }} 
-                            onClick={() => multipleMode ? toggleMultipleSelection(cleanedOption) : handleAnswer(currentQuestion.id as keyof PromptData, cleanedOption)} 
+                            onClick={() => multipleMode ? toggleMultipleSelection(option) : handleAnswer(currentQuestion.id as keyof PromptData, option)} 
                             className={`p-5 rounded-xl border-2 transition-all text-left ${ isSelected ? 'bg-amber-500/20 border-amber-500 text-amber-100' : 'bg-gray-900 border-gray-800 hover:border-gray-700 text-white hover:bg-gray-800' }`}
                           >
-                            <span className="text-base font-medium">{cleanedOption}</span>
+                            <span className="text-base font-medium">{option}</span>
                           </motion.button>
                         ); 
                       })}
@@ -1331,7 +1183,7 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
               {(knowledgeInsights || []).length > 0 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-amber-900/20 border border-amber-700/30 rounded-xl space-y-3">
                   <h4 className="text-amber-400 text-base font-semibold">📚 Relevant Knowledge</h4>
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                  <div className="space-y-2">
                     {(knowledgeInsights || []).map((insight, index) => (
                       <div key={index} className="text-amber-300 text-sm leading-relaxed">{insight}</div>
                     ))}
@@ -1360,7 +1212,7 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
               {(genreSuggestions || []).length > 0 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-blue-900/20 border border-blue-700/30 rounded-xl space-y-3">
                   <h4 className="text-blue-400 text-base font-semibold">🎬 Genre-Specific Tips</h4>
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                  <div className="space-y-2">
                     {(genreSuggestions || []).map((suggestion, index) => (
                       <div key={index} className="text-blue-300 text-sm leading-relaxed">{suggestion}</div>
                     ))}
@@ -1372,28 +1224,25 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }} 
                   animate={{ opacity: 1, y: 0 }} 
-                  className="space-y-3 max-h-96 overflow-y-auto pr-2"
+                  className="space-y-3"
                 >
-                  {(aiSuggestions || []).map((suggestion, index) => {
-                    const cleanedSuggestion = cleanSuggestion(suggestion);
-                    return (
-                      <motion.button 
-                        key={index} 
-                        initial={{ opacity: 0, x: -10 }} 
-                        animate={{ opacity: 1, x: 0 }} 
-                        transition={{ delay: index * 0.1 }} 
-                        whileHover={{ scale: 1.01, x: 4 }} 
-                        whileTap={{ scale: 0.99 }} 
-                        onClick={() => handleAnswer(currentQuestion.id as keyof PromptData, cleanedSuggestion)} 
-                        className="w-full p-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-left transition-all group flex-shrink-0"
-                      >
-                        <div className="flex items-start space-x-3">
-                          <span className="text-amber-400 text-lg group-hover:scale-110 transition-transform">✨</span>
-                          <span className="text-gray-200 text-base leading-relaxed group-hover:text-white transition-colors">{cleanedSuggestion}</span>
-                        </div>
-                      </motion.button>
-                    );
-                  })}
+                  {(aiSuggestions || []).map((suggestion, index) => (
+                    <motion.button 
+                      key={index} 
+                      initial={{ opacity: 0, x: -10 }} 
+                      animate={{ opacity: 1, x: 0 }} 
+                      transition={{ delay: index * 0.1 }} 
+                      whileHover={{ scale: 1.01, x: 4 }} 
+                      whileTap={{ scale: 0.99 }} 
+                      onClick={() => handleAnswer(currentQuestion.id as keyof PromptData, suggestion)} 
+                      className="w-full p-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-left transition-all group"
+                    >
+                      <div className="flex items-start space-x-3">
+                        <span className="text-amber-400 text-lg group-hover:scale-110 transition-transform">✨</span>
+                        <span className="text-gray-200 text-base leading-relaxed group-hover:text-white transition-colors">{suggestion}</span>
+                      </div>
+                    </motion.button>
+                  ))}
                 </motion.div>
               )}
             </motion.div>
@@ -1754,18 +1603,6 @@ const StoryboardPage: React.FC<{
     };
 
     const estimatedSeconds = progress ? Math.max(0, Math.round(progress.estimatedMsRemaining / 1000)) : 0;
-    const isScriptReady = script.trim().length > 0;
-
-    const primaryCtaClasses = [
-        'w-full sm:w-auto px-8 py-4 text-base font-semibold text-white rounded-lg shadow-lg shadow-purple-900/30',
-        'flex items-center justify-center space-x-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed',
-        'bg-gradient-to-r',
-        isScriptReady ? 'from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700' : 'from-slate-600 to-slate-700',
-        isLoading ? 'cursor-wait' : 'cursor-pointer',
-        !isScriptReady ? 'opacity-60' : '',
-    ]
-        .filter(Boolean)
-        .join(' ');
 
     const handleStoryIdeationComplete = (context: Partial<StoryContext>, generatedScript: string) => {
         // Add the generated script to the existing script content
@@ -1821,78 +1658,28 @@ const StoryboardPage: React.FC<{
                         </p>
                     )}
                     
-                    <div className="mb-8 grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                        <motion.div
-                            initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.05 }}
-                            className="bg-gray-900/70 border border-amber-500/20 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+                    {/* Story Ideation Button */}
+                    <div className="mb-6">
+                        <motion.button
+                            onClick={() => setShowStoryIdeation(true)}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="w-full p-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg transition-all flex items-center justify-center space-x-2 mb-3"
                         >
-                            <div className="space-y-1">
-                                <h2 className="text-lg sm:text-xl font-semibold text-white">Ready to Generate Your Storyboard?</h2>
-                                <p className="text-sm text-gray-400">
-                                    Dreamer will break your script into cinematic shots with composition, camera, and lighting suggestions tailored to your tone.
-                                </p>
-                            </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
-                                <motion.button
-                                    onClick={handleGenerateStoryboard}
-                                    disabled={isLoading || !isScriptReady}
-                                    whileHover={!isLoading && isScriptReady ? { scale: 1.02 } : undefined}
-                                    whileTap={!isLoading && isScriptReady ? { scale: 0.98 } : undefined}
-                                    className={primaryCtaClasses}
-                                >
-                                    {isLoading && <div className="w-5 h-5 animate-spin rounded-full border-2 border-gray-300 border-t-white" />}
-                                    <span>
-                                        {!isScriptReady
-                                            ? 'Enter Script First'
-                                            : isLoading
-                                                ? 'Generating...'
-                                                : 'Generate Storyboard'
-                                        }
-                                    </span>
-                                </motion.button>
-                                <motion.button
-                                    onClick={() => setStage('landing')}
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    className="w-full sm:w-auto px-6 py-3 text-sm font-medium rounded-lg border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors"
-                                >
-                                    Back
-                                </motion.button>
-                            </div>
-                        </motion.div>
-
-                        <motion.div
-                            initial={{ opacity: 0, y: 12 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 }}
-                            className="bg-gray-900/40 border border-dashed border-purple-500/30 rounded-xl p-5 flex flex-col justify-between gap-3"
-                        >
-                            <div className="space-y-2">
-                                <h3 className="text-base font-semibold text-purple-200">Need Story Inspiration?</h3>
-                                <p className="text-sm text-gray-400">
-                                    Explore character arcs, themes, and twists with our guided Story Ideation flow before you generate visuals.
-                                </p>
-                            </div>
-                            <motion.button
-                                onClick={() => setShowStoryIdeation(true)}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                                className="w-full px-6 py-3 text-sm font-medium rounded-lg border border-purple-400/50 text-purple-200 hover:bg-purple-500/10 transition-colors flex items-center justify-center gap-2"
-                            >
-                                <WandSparkles className="w-5 h-5" />
-                                <span>Get Story Ideas</span>
-                            </motion.button>
-                        </motion.div>
+                            <WandSparkles className="w-5 h-5" />
+                            <span>🎭 Get Story Ideas (AI-Powered)</span>
+                        </motion.button>
+                        <p className="text-xs text-gray-400 text-center">
+                            Need help developing your story? Let Dreamer guide you through smart questions to build compelling characters, conflict, and narrative.
+                        </p>
                     </div>
-
+                    
                     <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-300 mb-2">
                             Custom Instructions (Optional)
                         </label>
-                        <textarea
-                            value={customInstructions}
+                        <textarea 
+                            value={customInstructions} 
                             onChange={e => setCustomInstructions(e.target.value)} 
                             placeholder="Add specific instructions for your storyboard... (e.g., 'Use warmer color palette', 'Focus on close-up emotional shots', 'Include more action sequences', 'Emphasize the protagonist's perspective')" 
                             className="w-full h-24 p-3 bg-gray-900 border border-gray-800 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none resize-none" 
@@ -1902,6 +1689,36 @@ const StoryboardPage: React.FC<{
                         </p>
                     </div>
                     
+                    <div className="flex justify-center space-x-4">
+                        <motion.button onClick={() => setStage('landing')} className="px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg">Back</motion.button>
+                        <motion.button 
+                            onClick={handleGenerateStoryboard} 
+                            disabled={isLoading || !script.trim()} 
+                            className={`px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 transition-all duration-200 ${
+                                !script.trim() ? 'opacity-60' : ''
+                            } ${
+                                isLoading ? 'cursor-wait' : 'cursor-pointer hover:from-purple-700 hover:to-indigo-700'
+                            }`}
+                            style={{
+                                background: isLoading 
+                                    ? 'linear-gradient(to right, #8b5cf6, #6366f1)' 
+                                    : !script.trim() 
+                                        ? 'linear-gradient(to right, #6b7280, #4b5563)' 
+                                        : 'linear-gradient(to right, #9333ea, #4f46e5)'
+                            }}
+                        >
+                            {isLoading && <div className="w-5 h-5 animate-spin rounded-full border-2 border-gray-300 border-t-white" />}
+                            <span>
+                                {!script.trim() 
+                                    ? 'Enter Script First' 
+                                    : isLoading 
+                                        ? 'Generating...' 
+                                        : 'Generate Storyboard'
+                                }
+                            </span>
+                        </motion.button>
+                    </div>
+
                     {progress && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-3">
                             <div className="flex items-center justify-between text-sm text-gray-400">
@@ -2173,7 +1990,6 @@ interface SelectedItemPanelProps {
     onGenerateVideoPrompt: (item: ShotItem) => void;
     generatedContent: {
         images: { photoreal?: string; stylized?: string };
-        imageMimeTypes?: { photoreal?: string; stylized?: string };
         enhancedPrompt?: string;
         videoPrompt?: string;
         status: 'idle' | 'loading' | 'error';
@@ -2252,9 +2068,6 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
     const setCurrentStyle = (style: 'cinematic' | 'explainer') => {
         setStyles(prev => ({ ...prev, [item.id]: style }));
     };
-
-    const getImageMimeType = (view: 'photoreal' | 'stylized') =>
-        generatedContent.imageMimeTypes?.[view] ?? (view === 'photoreal' ? 'image/jpeg' : 'image/png');
 
     // Visual Editor Handlers
     const onCompositionChange = (field: keyof CompositionData, value: any) => updateVisuals(item.id, 'compositions', { ...visualData.composition, [field]: value });
@@ -2403,22 +2216,14 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                         )}
                         {generatedContent.status === 'idle' && generatedContent.images[imageView] && (
                             <>
-                                <img
-                                    src={`data:${getImageMimeType(imageView)};base64,${generatedContent.images[imageView]}`}
-                                    className="max-w-full max-h-full object-contain rounded"
-                                    alt="Generated scene"
-                                />
+                                <img src={imageView === 'photoreal' ? `data:image/jpeg;base64,${generatedContent.images.photoreal}` : `data:image/png;base64,${generatedContent.images.stylized}`} className="max-w-full max-h-full object-contain rounded" alt="Generated scene"/>
                                 <motion.button
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => {
                                         const base64Data = generatedContent.images[imageView]!;
-                                        const mimeType = getImageMimeType(imageView);
-                                        const extension = mimeType === 'image/png'
-                                            ? 'png'
-                                            : mimeType === 'image/svg+xml'
-                                                ? 'svg'
-                                                : 'jpg';
+                                        const mimeType = imageView === 'photoreal' ? 'image/jpeg' : 'image/png';
+                                        const extension = imageView === 'photoreal' ? 'jpg' : 'png';
                                         const filename = `dreamer-shot-${shotData.shotNumber}-${imageView}.${extension}`;
                                         downloadBase64Image(base64Data, mimeType, filename);
                                     }}
@@ -2629,7 +2434,12 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
     }, []);
     
     // State for generated content, keyed by timeline item ID
-    const [generatedContent, setGeneratedContent] = useState<Record<string, GeneratedContentEntry>>({});
+    const [generatedContent, setGeneratedContent] = useState<Record<string, {
+        images: { photoreal?: string; stylized?: string };
+        enhancedPrompt?: string;
+        videoPrompt?: string;
+        status: 'idle' | 'loading' | 'error';
+    }>>({});
 
     const activeItem = useMemo(() => timelineItems.find(item => item.id === activeTimelineItemId), [timelineItems, activeTimelineItemId]);
 
@@ -2771,27 +2581,14 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
 
     const handleEnhance = async (item: ShotItem) => {
         const id = item.id;
-        setGeneratedContent(prev => {
-            const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
-            return { ...prev, [id]: { ...existing, status: 'loading' } };
-        });
+        setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'loading'}}));
         try {
             const context = (timelineItems || []).filter(i => i).map(i => i.type === 'shot' ? `Shot ${(i as ShotItem)?.data?.shotNumber ?? '?'}: ${(i as ShotItem)?.data?.description ?? ''}` : '').join('\n');
-            const knowledgeContext = buildKnowledgeContextForVisuals();
-            const enhanced = await enhanceShotPrompt(
-                item.data.prompt,
-                knowledgeContext ? `${context}\nKnowledge Notes:\n${knowledgeContext}` : context
-            );
+            const enhanced = await enhanceShotPrompt(item.data.prompt, context);
             updateShotData(id, { prompt: enhanced });
-            setGeneratedContent(prev => {
-                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
-                return { ...prev, [id]: { ...existing, status: 'idle', enhancedPrompt: enhanced } };
-            });
+            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'idle', enhancedPrompt: enhanced}}));
         } catch (e) {
-            setGeneratedContent(prev => {
-                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
-                return { ...prev, [id]: { ...existing, status: 'error' } };
-            });
+            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'error'}}));
         }
     };
 
@@ -2802,10 +2599,7 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
     const handleGenerateImage = async (item: ShotItem, type: 'photoreal' | 'stylized') => {
         const id = item.id;
         const style = styles[id] || 'cinematic';
-        setGeneratedContent(prev => {
-            const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
-            return { ...prev, [id]: { ...existing, status: 'loading' } };
-        });
+        setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'loading'}}));
         try {
             const promptForGeneration = style === 'explainer' ? item.data.description : item.data.prompt;
             const imageGenerator = type === 'photoreal' ? generateImage : generateNanoImage;
@@ -2818,24 +2612,13 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
               b64 = await generateNanoImage(promptForGeneration, style);
             }
 
-            setGeneratedContent(prev => {
-                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
-                const mimeType = detectBase64MimeType(b64, type === 'photoreal' ? 'image/jpeg' : 'image/png');
-                return {
-                    ...prev,
-                    [id]: {
-                        ...existing,
-                        status: 'idle',
-                        images: { ...existing.images, [type]: b64 },
-                        imageMimeTypes: { ...existing.imageMimeTypes, [type]: mimeType }
-                    }
-                };
-            });
+            setGeneratedContent(prev => ({...prev, [id]: {
+                ...(prev[id] || {images:{}}),
+                status: 'idle',
+                images: {...prev[id]?.images, [type]: b64}
+            }}));
         } catch (e) {
-            setGeneratedContent(prev => {
-                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
-                return { ...prev, [id]: { ...existing, status: 'error' } };
-            });
+            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'error'}}));
         }
     };
 
@@ -2843,26 +2626,15 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
         if (!showVideoPromptModal) return;
         const item = showVideoPromptModal;
         const id = item.id;
-        setGeneratedContent(prev => {
-            const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
-            return { ...prev, [id]: { ...existing, status: 'loading' } };
-        });
+        setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'loading'}}));
         setShowVideoPromptModal(null);
         try {
-            const photoBase64 = generatedContent[id]?.images?.photoreal;
-            const photoMimeType = generatedContent[id]?.imageMimeTypes?.photoreal || detectBase64MimeType(photoBase64, 'image/jpeg');
-            const image = photoBase64 ? { base64: photoBase64, mimeType: photoMimeType } : undefined;
+            const image = generatedContent[id]?.images?.photoreal ? { base64: generatedContent[id].images.photoreal!, mimeType: 'image/jpeg' } : undefined;
             const videoPrompt = await generateVideoPrompt(item.data.prompt, image, videoPromptInstructions);
-            setGeneratedContent(prev => {
-                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
-                return { ...prev, [id]: { ...existing, status: 'idle', videoPrompt: videoPrompt } };
-            });
+            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'idle', videoPrompt: videoPrompt}}));
             setVideoPromptInstructions("");
         } catch (e) {
-            setGeneratedContent(prev => {
-                const existing = prev[id] || { images: {}, imageMimeTypes: {}, status: 'idle' as const };
-                return { ...prev, [id]: { ...existing, status: 'error' } };
-            });
+            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'error'}}));
         }
     };
 
@@ -3208,11 +2980,6 @@ export default function App() {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [isLoadingProgress, setIsLoadingProgress] = useState(true);
 
-    // Helper function for knowledge context
-    const buildKnowledgeContextForVisuals = useCallback(() => {
-        const summaries = selectRelevantKnowledgeDocs(knowledgeDocs, promptData, 3);
-        return summaries.map(summary => `${summary.doc.name}: ${summary.summary}`).join('\n');
-    }, [knowledgeDocs, promptData]);
 
     const presetFileInputRef = useRef<HTMLInputElement>(null);
     const saveInProgressRef = useRef<boolean>(false);
@@ -3522,142 +3289,39 @@ export default function App() {
         return value;
     };
 
-const sanitizeSentence = (text: string): string => text.replace(/\.+$/, '').trim();
-
-const analyzeScript = (script: string, totalShots: number): string[] => {
+    const analyzeScript = (script: string, totalShots: number): string[] => {
         if (!script || script.trim().length === 0) return [];
-        const normalized = (script || '').replace(/\r\n/g, '\n');
-        let segments = normalized.split(/\n\n+/).map(segment => segment.trim()).filter(Boolean);
-
-        if (segments.length <= 1) {
-            const sentences = normalized.split(/(?<=[.!?])\s+/).map(sentence => sentence.trim()).filter(Boolean);
-            if (sentences.length > 0) {
-                const sentencesPerShot = Math.max(1, Math.ceil(sentences.length / totalShots));
-                const grouped: string[] = [];
-                for (let i = 0; i < sentences.length; i += sentencesPerShot) {
-                    grouped.push(sentences.slice(i, i + sentencesPerShot).join(' '));
-                }
-                segments = grouped;
-            }
-        }
-
+        const segments = (script || '').split(/\n\n+/).map(segment => segment.trim()).filter(Boolean);
         if (segments.length === 0) return [];
-
         const scenesPerShot = Math.max(1, Math.ceil(segments.length / totalShots));
         const shotScenes: string[] = [];
         for (let i = 0; i < totalShots; i++) {
-            const startIndex = i * scenesPerShot;
-            const endIndex = Math.min(startIndex + scenesPerShot, segments.length);
-            const combined = segments.slice(startIndex, endIndex).join(' ') || segments[Math.min(i, segments.length - 1)] || '';
-            shotScenes.push(truncateNarrativeText(combined, 240));
+          const startIndex = i * scenesPerShot;
+          const endIndex = Math.min(startIndex + scenesPerShot, segments.length);
+          shotScenes.push(segments.slice(startIndex, endIndex).join(' ') || segments[i] || '');
         }
-    return shotScenes;
-};
-
-const buildShotNarrative = (
-    data: PromptData,
-    knowledgeSummaries: KnowledgeSummary[],
-    shotIndex: number,
-    scriptScene?: string
-): string => {
-    const segments: string[] = [];
-
-    const baseNarrative = (scriptScene && scriptScene.trim())
-        || getValueForShot(data.storyBeat, shotIndex)
-        || getValueForShot(data.sceneCore, shotIndex);
-    if (baseNarrative) {
-        segments.push(sanitizeSentence(baseNarrative));
-    }
-
-    const emotion = getValueForShot(data.emotion, shotIndex);
-    if (emotion) {
-        segments.push(`Emotional tone: ${sanitizeSentence(emotion)}`);
-    }
-
-    const toneKeywords = getValueForShot(data.visualToneKeywords, shotIndex);
-    if (toneKeywords) {
-        segments.push(`Visual tone: ${sanitizeSentence(toneKeywords)}`);
-    }
-
-    const cameraSetup = getValueForShot(data.visualCameraSetup, shotIndex) || getValueForShot(data.cameraType, shotIndex);
-    const framing = getValueForShot(data.framing, shotIndex);
-    const focusMotion = getValueForShot(data.visualFocusMotion, shotIndex);
-    const cameraDetails = [cameraSetup && `camera ${cameraSetup}`, framing && `framing ${framing}`, focusMotion && `${focusMotion} focus`]
-        .filter(Boolean)
-        .map(part => sanitizeSentence(part as string));
-    if (cameraDetails.length > 0) {
-        segments.push(`Shot design: ${cameraDetails.join(', ')}`);
-    }
-
-    const cameraMovementDetail = getValueForShot(data.visualCameraMovement, shotIndex);
-    if (cameraMovementDetail) {
-        segments.push(`Camera movement: ${sanitizeSentence(cameraMovementDetail)}`);
-    }
-
-    const lightingMood = getValueForShot(data.visualLightingMood, shotIndex) || getValueForShot(data.lightingStyle, shotIndex);
-    const atmosphere = getValueForShot(data.atmosphere, shotIndex);
-    const lightingSegments = [lightingMood, atmosphere].filter(Boolean).map(value => sanitizeSentence(value as string));
-    if (lightingSegments.length > 0) {
-        segments.push(`Lighting & atmosphere: ${lightingSegments.join(', ')}`);
-    }
-
-    const palette = getValueForShot(data.visualColorPalette, shotIndex) || getValueForShot(data.colorPalette, shotIndex);
-    const grade = getValueForShot(data.colorGrading, shotIndex) || getValueForShot(data.filmEmulation, shotIndex);
-    const colorSegments = [grade && `grade ${grade}`, palette && `palette ${palette}`]
-        .filter(Boolean)
-        .map(value => sanitizeSentence(value as string));
-    if (colorSegments.length > 0) {
-        segments.push(`Color approach: ${colorSegments.join(', ')}`);
-    }
-
-    if (knowledgeSummaries.length > 0) {
-        const knowledge = knowledgeSummaries[shotIndex % knowledgeSummaries.length];
-        if (knowledge?.summary) {
-            const docName = knowledge.doc?.name || 'Knowledge Insight';
-            segments.push(`Guided by ${docName}: ${sanitizeSentence(knowledge.summary)}`);
-        }
-    }
-
-    const cleanedSegments = segments
-        .map(segment => segment.replace(/\s+/g, ' ').trim())
-        .filter(Boolean);
-
-    if (cleanedSegments.length === 0) {
-        return 'A cinematic beat expanding on the evolving story world.';
-    }
-
-    const narrative = cleanedSegments.join('. ');
-    return truncateNarrativeText(narrative, 240);
-};
+        return shotScenes;
+    };
 
     const generatePrompt = async () => {
         try {
-            const numberOfShots = parseInt(formatValue(promptData.numberOfShots), 10) || 3;
-            const defaultShotTypes = ['medium shot', 'close up', 'wide shot'];
-            const parsedShotTypes = (formatValue(promptData.shotTypes) || '')
-                .split(',')
-                .map(s => s.trim())
-                .filter(Boolean);
-            const shotTypeArray = parsedShotTypes.length > 0 ? parsedShotTypes : defaultShotTypes;
+            const numberOfShots = parseInt(formatValue(promptData.numberOfShots)) || 3;
+            const shotTypeArray = ((formatValue(promptData.numberOfShots) || 'medium shot, close up, wide shot') as string).split(',').map(s => s.trim());
             const shotScenes = promptData.scriptText ? analyzeScript(promptData.scriptText, numberOfShots) : [];
-
-            const knowledgeSummaries = selectRelevantKnowledgeDocs(knowledgeDocs, promptData, 3);
-            const knowledgeContext = knowledgeSummaries.map(summary => `${summary.doc.name}: ${summary.summary}`).join('\n');
-
+            
             const newShotItems: ShotItem[] = [];
             for (let i = 0; i < numberOfShots; i++) {
                 const newItemId = crypto.randomUUID();
-                const sceneNarrative = buildShotNarrative(promptData, knowledgeSummaries, i, shotScenes[i]);
                 const shotPrompt: ShotPrompt = {
                     shotNumber: i + 1,
-                    prompt: `Placeholder for Shot ${i + 1}`,
-                    originalPrompt: `Placeholder for Shot ${i + 1}`,
-                    description: sceneNarrative,
+                    prompt: `Placeholder for Shot ${i+1}`,
+                    originalPrompt: `Placeholder for Shot ${i+1}`,
+                    description: shotScenes[i] || getValueForShot(promptData.sceneCore, i),
                     role: shotTypeArray[i % shotTypeArray.length]
                 };
                 newShotItems.push({ id: newItemId, type: 'shot', data: shotPrompt });
             }
-
+            
             const updates: { comp: Record<string, CompositionData>, light: Record<string, LightingData>, color: Record<string, ColorGradingData>, move: Record<string, CameraMovementData> } = { comp: {}, light: {}, color: {}, move: {} };
             newShotItems.forEach(item => {
                 updates.comp[item.id] = clone(defaultComposition);
@@ -3678,27 +3342,24 @@ const buildShotNarrative = (
                             lighting: updates.light[item.id],
                             color: updates.color[item.id],
                             camera: updates.move[item.id],
-                        }, knowledgeContext);
+                        });
                         const prompt = `Cinematic shot ${item.data.shotNumber}: ${item.data.role}. Scene: ${item.data.description}. ${smartDesc}`;
                         return { ...item, data: { ...item.data, prompt, originalPrompt: prompt } };
                     } catch (itemError) {
                         appLogger.error(`Failed to generate smart description for shot ${item.data.shotNumber}:`, itemError);
                         // Provide fallback description
-                        const knowledgeFlavor = knowledgeSummaries[0]?.summary ? ` Knowledge focus: ${knowledgeSummaries[0].summary}.` : '';
-                        const fallbackPrompt = `Cinematic shot ${item.data.shotNumber}: ${item.data.role}. Scene: ${item.data.description}. A visually compelling scene with cinematic composition and lighting.${knowledgeFlavor}`;
+                        const fallbackPrompt = `Cinematic shot ${item.data.shotNumber}: ${item.data.role}. Scene: ${item.data.description}. A visually compelling scene with cinematic composition and lighting.`;
                         return { ...item, data: { ...item.data, prompt: fallbackPrompt, originalPrompt: fallbackPrompt } };
                     }
                 }));
 
                 setTimelineItems(finalItems);
                 setStage('final');
-                setGeneratedContent({});
             } catch (promiseError) {
                 appLogger.error('Failed to generate visual descriptions:', promiseError);
                 // Still proceed with basic shot items
                 setTimelineItems(newShotItems);
                 setStage('final');
-                setGeneratedContent({});
             }
         } catch (error) {
             handleError(error, { showUserMessage: true, context: 'Prompt Generation' });
@@ -3921,10 +3582,9 @@ const buildShotNarrative = (
             };
 
             try {
-                const knowledgeContext = buildKnowledgeContextForVisuals();
-                const smartDesc = await generateSmartVisualDescription(visualData, knowledgeContext);
+                const smartDesc = await generateSmartVisualDescription(visualData);
                 const newPrompt = `Cinematic shot ${item.data.shotNumber}: ${item.data.role}. Scene: ${item.data.description}. ${smartDesc}`;
-
+                
                 setTimelineItems(prev => (prev || []).map(i => i.id === timelineItemId && i.type === 'shot' ? {...i, data: {...i.data, prompt: newPrompt }} : i));
             } catch (aiError) {
                 appLogger.error('Failed to generate smart visual description:', aiError);
