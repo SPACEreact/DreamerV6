@@ -55,55 +55,8 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
   }, [questions]);
 
   useEffect(() => {
-    if (!shouldShowCurrentQuestion) {
-      return;
-    }
-
-    let isActive = true;
-
-    const fetchSuggestions = async () => {
-      setIsGeneratingSuggestions(true);
-
-      const knowledge = StoryIdeationService.getRelevantKnowledge(currentQuestion.id);
-      if (isActive) {
-        setKnowledgeInsights(knowledge);
-      }
-
-      try {
-        const smartSuggestions = await StoryIdeationService.generateSmartSuggestions(
-          currentQuestion.id,
-          context,
-          answersMap
-        );
-
-        if (isActive) {
-          const normalizedSuggestions = Array.from(
-            new Set(
-              (smartSuggestions || [])
-                .map(suggestion => suggestion.trim())
-                .filter(suggestion => suggestion.length > 0)
-            )
-          );
-          setSuggestions(normalizedSuggestions);
-        }
-      } catch (error) {
-        if (isActive) {
-          const fallbackSuggestions = Array.from(
-            new Set(
-              StoryIdeationService.getRelevantKnowledge(currentQuestion.id)
-                .map(suggestion => suggestion.trim())
-                .filter(suggestion => suggestion.length > 0)
-            )
-          );
-          setSuggestions(fallbackSuggestions);
-        }
-      } finally {
-        if (isActive) {
-          setIsGeneratingSuggestions(false);
-        }
-      }
-    }
-  }, [currentQuestionState?.answer, currentQuestion.id, shouldShowCurrentQuestion]);
+    setKnowledgeInsights(StoryIdeationService.getRelevantKnowledge(currentQuestion.id));
+  }, [currentQuestion.id]);
 
   useEffect(() => {
     // Analyze story for genre when we have enough context
@@ -124,67 +77,70 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
     }
   };
 
-  useEffect(() => {
-    if (!shouldShowCurrentQuestion) {
-      setIsGeneratingSuggestions(false);
-      setSuggestions([]);
-      setKnowledgeInsights([]);
-      return;
-    }
+  const generateSuggestionsForNext = async (
+    contextOverride?: Partial<StoryContext>,
+    questionsOverride?: QuestionState[]
+  ) => {
+    setIsGeneratingSuggestions(true);
+    try {
+      const questionsToUse = questionsOverride ?? questions;
+      const contextToUse = contextOverride ?? context;
 
-    setKnowledgeInsights(StoryIdeationService.getRelevantKnowledge(currentQuestion.id));
-
-    let isActive = true;
-
-    const fetchSuggestions = async () => {
-      setIsGeneratingSuggestions(true);
-      setSuggestions([]);
-
-      try {
-        const allAnswers = questions.reduce((acc, q) => {
-          acc[q.id] = q.answer;
-          return acc;
-        }, {} as Record<string, string>);
+      const allAnswers = questionsToUse.reduce((acc, q) => {
+        acc[q.id] = q.answer;
+        return acc;
+      }, {} as Record<string, string>);
 
         const smartSuggestions = await StoryIdeationService.generateSmartSuggestions(
-          currentQuestion.id,
-          context,
+          nextQuestion.id,
+          contextToUse,
           allAnswers
         );
-
-        if (!isActive) {
-          return;
-        }
-
-        const normalizedSuggestions = Array.from(
-          new Set(
-            (smartSuggestions ?? [])
-              .map(suggestion => suggestion.trim())
-              .filter(suggestion => suggestion.length > 0)
-          )
-        );
-
-        setSuggestions(normalizedSuggestions);
-      } catch (error) {
-        if (isActive) {
-          setSuggestions([]);
-        }
-      } finally {
-        if (isActive) {
-          setIsGeneratingSuggestions(false);
-        }
+        setSuggestions(smartSuggestions);
+      } else {
+        setSuggestions([]);
       }
-    };
+    } catch (error) {
+      // Suggestion generation failed
+    } finally {
+      setIsGeneratingSuggestions(false);
+    }
+  };
 
-    fetchSuggestions();
+  const handleAnswerChange = (answer: string) => {
+    const trimmedAnswer = answer.trim();
+    const updatedQuestions = questions.map(q =>
+      q.id === currentQuestion.id
+        ? { ...q, answer: trimmedAnswer, completed: trimmedAnswer.length > 0 }
+        : q
+    );
 
-    return () => {
-      isActive = false;
-    };
-  }, [context, currentQuestion.id, questions, shouldShowCurrentQuestion]);
+    const updatedContext: Partial<StoryContext> = { ...context };
 
-      return updatedContext;
-    });
+    if (trimmedAnswer.length > 0) {
+      (updatedContext as Record<string, string>)[currentQuestion.id] = trimmedAnswer;
+    } else {
+      delete (updatedContext as Record<string, string>)[currentQuestion.id];
+    }
+
+    if (currentQuestion.id === 'protagonist') {
+      const ageMatch = trimmedAnswer.match(/\b(\d{1,3})\b/);
+      if (ageMatch) {
+        updatedContext.age = ageMatch[1];
+      } else {
+        delete updatedContext.age;
+      }
+    }
+
+    setQuestions(updatedQuestions);
+    setContext(updatedContext);
+
+    if (shouldShowCurrentQuestion && trimmedAnswer.length > 0) {
+      generateSuggestionsForNext(updatedContext, updatedQuestions);
+    } else {
+      setIsGeneratingSuggestions(false);
+      setSuggestions([]);
+    }
   };
 
   const handleSuggestionClick = (suggestion: string) => {
