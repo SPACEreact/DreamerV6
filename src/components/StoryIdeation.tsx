@@ -102,14 +102,8 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
           setIsGeneratingSuggestions(false);
         }
       }
-    };
-
-    fetchSuggestions();
-
-    return () => {
-      isActive = false;
-    };
-  }, [answersMap, context, currentQuestion.id, shouldShowCurrentQuestion]);
+    }
+  }, [currentQuestionState?.answer, currentQuestion.id, shouldShowCurrentQuestion]);
 
   useEffect(() => {
     // Analyze story for genre when we have enough context
@@ -130,32 +124,64 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
     }
   };
 
-  const handleAnswerChange = (answer: string) => {
-    const trimmedAnswer = answer.trim();
+  useEffect(() => {
+    if (!shouldShowCurrentQuestion) {
+      setIsGeneratingSuggestions(false);
+      setSuggestions([]);
+      setKnowledgeInsights([]);
+      return;
+    }
 
-    setQuestions(prev => prev.map(q =>
-      q.id === currentQuestion.id
-        ? { ...q, answer: trimmedAnswer, completed: trimmedAnswer.length > 0 }
-        : q
-    ));
+    setKnowledgeInsights(StoryIdeationService.getRelevantKnowledge(currentQuestion.id));
 
-    setContext(prev => {
-      const updatedContext = { ...prev };
+    let isActive = true;
 
-      if (trimmedAnswer.length > 0) {
-        updatedContext[currentQuestion.id as keyof StoryContext] = trimmedAnswer as any;
-      } else {
-        delete updatedContext[currentQuestion.id as keyof StoryContext];
-      }
+    const fetchSuggestions = async () => {
+      setIsGeneratingSuggestions(true);
+      setSuggestions([]);
 
-      if (currentQuestion.id === 'protagonist') {
-        const ageMatch = trimmedAnswer.match(/(\d+)/);
-        if (ageMatch) {
-          updatedContext.age = ageMatch[1];
-        } else {
-          delete updatedContext.age;
+      try {
+        const allAnswers = questions.reduce((acc, q) => {
+          acc[q.id] = q.answer;
+          return acc;
+        }, {} as Record<string, string>);
+
+        const smartSuggestions = await StoryIdeationService.generateSmartSuggestions(
+          currentQuestion.id,
+          context,
+          allAnswers
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        const normalizedSuggestions = Array.from(
+          new Set(
+            (smartSuggestions ?? [])
+              .map(suggestion => suggestion.trim())
+              .filter(suggestion => suggestion.length > 0)
+          )
+        );
+
+        setSuggestions(normalizedSuggestions);
+      } catch (error) {
+        if (isActive) {
+          setSuggestions([]);
+        }
+      } finally {
+        if (isActive) {
+          setIsGeneratingSuggestions(false);
         }
       }
+    };
+
+    fetchSuggestions();
+
+    return () => {
+      isActive = false;
+    };
+  }, [context, currentQuestion.id, questions, shouldShowCurrentQuestion]);
 
       return updatedContext;
     });
@@ -173,26 +199,22 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
     if (currentQuestionIndex < storyIdeationQuestions.length - 1) {
       // Skip questions that shouldn't be shown
       let nextIndex = currentQuestionIndex + 1;
-      while (nextIndex < storyIdeationQuestions.length && 
+      while (nextIndex < storyIdeationQuestions.length &&
              !StoryIdeationService.shouldShowQuestion(storyIdeationQuestions[nextIndex].id, context)) {
         nextIndex++;
       }
       setCurrentQuestionIndex(nextIndex);
-      setSuggestions([]);
-      setKnowledgeInsights([]);
     }
   };
 
   const prevQuestion = () => {
     if (currentQuestionIndex > 0) {
       let prevIndex = currentQuestionIndex - 1;
-      while (prevIndex >= 0 && 
+      while (prevIndex >= 0 &&
              !StoryIdeationService.shouldShowQuestion(storyIdeationQuestions[prevIndex].id, context)) {
         prevIndex--;
       }
       setCurrentQuestionIndex(prevIndex >= 0 ? prevIndex : 0);
-      setSuggestions([]);
-      setKnowledgeInsights([]);
     }
   };
 
