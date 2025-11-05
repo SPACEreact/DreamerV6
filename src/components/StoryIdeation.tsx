@@ -48,22 +48,8 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
   const shouldShowCurrentQuestion = StoryIdeationService.shouldShowQuestion(currentQuestion.id, context);
 
   useEffect(() => {
-    if (shouldShowCurrentQuestion && currentQuestionState?.answer) {
-      const updatedContext = { ...context, [currentQuestion.id]: currentQuestionState.answer };
-      setContext(updatedContext);
-
-      // Update context for age-based insights
-      if (currentQuestion.id === 'protagonist' && currentQuestionState.answer) {
-        const ageMatch = currentQuestionState.answer.match(/(\d+)/);
-        if (ageMatch) {
-          updatedContext.age = ageMatch[1];
-        }
-      }
-
-      // Generate suggestions for next question
-      generateSuggestionsForNext();
-    }
-  }, [currentQuestionState?.answer, currentQuestion.id, shouldShowCurrentQuestion]);
+    setKnowledgeInsights(StoryIdeationService.getRelevantKnowledge(currentQuestion.id));
+  }, [currentQuestion.id]);
 
   useEffect(() => {
     // Analyze story for genre when we have enough context
@@ -84,10 +70,16 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
     }
   };
 
-  const generateSuggestionsForNext = async () => {
+  const generateSuggestionsForNext = async (
+    contextOverride?: Partial<StoryContext>,
+    questionsOverride?: QuestionState[]
+  ) => {
     setIsGeneratingSuggestions(true);
     try {
-      const allAnswers = questions.reduce((acc, q) => {
+      const questionsToUse = questionsOverride ?? questions;
+      const contextToUse = contextOverride ?? context;
+
+      const allAnswers = questionsToUse.reduce((acc, q) => {
         acc[q.id] = q.answer;
         return acc;
       }, {} as Record<string, string>);
@@ -96,15 +88,13 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
       if (nextQuestion) {
         const smartSuggestions = await StoryIdeationService.generateSmartSuggestions(
           nextQuestion.id,
-          context,
+          contextToUse,
           allAnswers
         );
         setSuggestions(smartSuggestions);
+      } else {
+        setSuggestions([]);
       }
-
-      // Get knowledge insights
-      const knowledge = StoryIdeationService.getRelevantKnowledge(currentQuestion.id);
-      setKnowledgeInsights(knowledge);
     } catch (error) {
       // Suggestion generation failed
     } finally {
@@ -113,11 +103,39 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
   };
 
   const handleAnswerChange = (answer: string) => {
-    setQuestions(prev => prev.map(q => 
-      q.id === currentQuestion.id 
-        ? { ...q, answer: answer.trim(), completed: answer.trim().length > 0 }
+    const trimmedAnswer = answer.trim();
+    const updatedQuestions = questions.map(q =>
+      q.id === currentQuestion.id
+        ? { ...q, answer: trimmedAnswer, completed: trimmedAnswer.length > 0 }
         : q
-    ));
+    );
+
+    const updatedContext: Partial<StoryContext> = { ...context };
+
+    if (trimmedAnswer.length > 0) {
+      (updatedContext as Record<string, string>)[currentQuestion.id] = trimmedAnswer;
+    } else {
+      delete (updatedContext as Record<string, string>)[currentQuestion.id];
+    }
+
+    if (currentQuestion.id === 'protagonist') {
+      const ageMatch = trimmedAnswer.match(/\b(\d{1,3})\b/);
+      if (ageMatch) {
+        updatedContext.age = ageMatch[1];
+      } else {
+        delete updatedContext.age;
+      }
+    }
+
+    setQuestions(updatedQuestions);
+    setContext(updatedContext);
+
+    if (shouldShowCurrentQuestion && trimmedAnswer.length > 0) {
+      generateSuggestionsForNext(updatedContext, updatedQuestions);
+    } else {
+      setIsGeneratingSuggestions(false);
+      setSuggestions([]);
+    }
   };
 
   const handleSuggestionClick = (suggestion: string) => {

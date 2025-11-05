@@ -234,50 +234,37 @@ export class StoryIdeationService {
   static buildScriptFromContext(context: Partial<StoryContext>): string {
     const parts: string[] = [];
 
-    if (context.protagonist) {
-      parts.push(`PROTAGONIST: ${context.protagonist}`);
-    }
+    const addPart = (label: string, value?: string) => {
+      const trimmed = value?.trim();
+      if (trimmed) {
+        parts.push(`${label}: ${trimmed}`);
+      }
+    };
 
-    if (context.setting) {
-      parts.push(`SETTING: ${context.setting}`);
-    }
-
-    if (context.timePeriod) {
-      parts.push(`TIME PERIOD: ${context.timePeriod}`);
-    }
-
-    if (context.coreWant) {
-      parts.push(`CORE DESIRE: ${context.coreWant}`);
-    }
-
-    if (context.centralConflict) {
-      parts.push(`CENTRAL CONFLICT: ${context.centralConflict}`);
-    }
-
-    if (context.stakes) {
-      parts.push(`STAKES: ${context.stakes}`);
-    }
-
-    if (context.emotionalTone) {
-      parts.push(`EMOTIONAL TONE: ${context.emotionalTone}`);
-    }
-
-    if (context.turningPoint) {
-      parts.push(`KEY MOMENT: ${context.turningPoint}`);
-    }
+    addPart('PROTAGONIST', context.protagonist);
+    addPart('SETTING', context.setting);
+    addPart('TIME PERIOD', context.timePeriod);
+    addPart('CORE DESIRE', context.coreWant);
+    addPart('CENTRAL CONFLICT', context.centralConflict);
+    addPart('STAKES', context.stakes);
+    addPart('EMOTIONAL TONE', context.emotionalTone);
+    addPart('KEY MOMENT', context.turningPoint);
 
     return parts.join('\n\n');
   }
 
   static shouldShowQuestion(questionId: string, context: Partial<StoryContext>): boolean {
-    // Logic for conditional questions based on previous answers
+    const hasCoreWant = !!context.coreWant?.trim();
+    const hasCentralConflict = !!context.centralConflict?.trim();
+    const hasGenreContext = !!context.genre?.trim() || !!context.storyType?.trim();
+
     switch (questionId) {
       case 'stakes':
-        return !!context.coreWant; // Only show if we know what they want
+        return hasCoreWant; // Only show if we know what they want
       case 'turningPoint':
-        return !!(context.coreWant && context.centralConflict); // Only show if we have conflict setup
+        return hasCoreWant && hasCentralConflict; // Only show if we have conflict setup
       case 'emotionalTone':
-        return !!context.genre || !!context.storyType; // Show if genre is determined
+        return hasGenreContext; // Show if genre is determined
       default:
         return true;
     }
