@@ -98,7 +98,7 @@ import {
     enhanceShotPrompt,
     generateStoryFromIdea,
     getRandomInspiration,
-    generateStoryboard, 
+    generateStoryboard,
     generateVideoPrompt,
     getTimelineSuggestion,
     analyzeSequenceStyle,
@@ -108,7 +108,8 @@ import {
     makeExplainerPromptCinematic,
     getKnowledgeBasedSuggestions,
     generateImage,
-    generateNanoImage
+    generateNanoImage,
+    CinematographyInsight
 } from './services/geminiService';
 import { huggingFaceService } from './services/huggingFaceService';
 import { genreIntelligenceService } from './services/genreIntelligenceService';
@@ -842,7 +843,7 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
     deleteConfiguration, deleteKnowledgeDoc, handleFileUpload, isProcessingDoc,
     currentQuestionIndex, setCurrentQuestionIndex, onBackToHome
 }) => {
-    const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+    const [bestInsight, setBestInsight] = useState<CinematographyInsight | null>(null);
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [huggingFaceReady, setHuggingFaceReady] = useState(false);
     const [knowledgeInsights, setKnowledgeInsights] = useState<string[]>([]);
@@ -937,7 +938,7 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
 
     const fetchAISuggestions = async () => {
         setIsLoadingAI(true);
-        setAiSuggestions([]);
+        setBestInsight(null);
         setKnowledgeInsights([]);
         setNarrativeAnalysis(null);
         setGenreProfile(null);
@@ -954,9 +955,9 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
         
         // Get enhanced knowledge-based suggestions
         try {
-            const { suggestions, relevantKnowledge } = await getKnowledgeBasedSuggestions(
-                fullContext, 
-                currentQuestion.question, 
+            const { bestSuggestion, relevantKnowledge } = await getKnowledgeBasedSuggestions(
+                fullContext,
+                currentQuestion.question,
                 knowledgeDocs
             );
             
@@ -978,9 +979,9 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
                 appLogger.warn('Genre intelligence failed:', genreError);
             }
             
-            setAiSuggestions(suggestions);
+            setBestInsight(bestSuggestion ?? null);
             setKnowledgeInsights(relevantKnowledge);
-            
+
             // Also get local narrative analysis if HuggingFace is ready
             if (huggingFaceReady) {
                 const analysis = await huggingFaceService.analyzeNarrative(fullContext);
@@ -988,16 +989,52 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
             }
         } catch (error) {
             appLogger.error('Enhanced suggestions failed, falling back to basic AI suggestions:', error);
-            const suggestions = await getAISuggestions(fullContext, currentQuestion.question, knowledgeDocs);
-            setAiSuggestions(suggestions);
+            const { bestSuggestion } = await getAISuggestions(fullContext, currentQuestion.question, knowledgeDocs);
+            setBestInsight(bestSuggestion ?? null);
         }
-        
+
         setIsLoadingAI(false);
     };
-    
+
+    const applyBestInsight = useCallback(() => {
+        if (!bestInsight || !currentQuestion) {
+            return;
+        }
+
+        try {
+            handleAnswer(
+                currentQuestion.id as keyof PromptData,
+                bestInsight.text as PromptData[keyof PromptData]
+            );
+            toast.success('Insight applied to the answer.');
+        } catch (error) {
+            appLogger.error('Failed to apply insight:', error);
+            toast.error('Unable to apply the insight.');
+        }
+    }, [bestInsight, currentQuestion, handleAnswer]);
+
+    const copyBestInsight = useCallback(async () => {
+        if (!bestInsight) {
+            return;
+        }
+
+        if (typeof navigator === 'undefined' || !navigator.clipboard) {
+            toast.error('Clipboard access is unavailable.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(bestInsight.text);
+            toast.success('Insight copied to clipboard.');
+        } catch (error) {
+            appLogger.error('Failed to copy insight:', error);
+            toast.error('Failed to copy insight. Please try again.');
+        }
+    }, [bestInsight]);
+
     const onSave = () => { if (!saveName.trim()) { alert('Please enter a name for this configuration'); return; } saveConfiguration(saveName); setSaveName(''); setShowSaveModal(false); }
-    const nextQuestion = () => { if (activeQuestions && currentQuestionIndex < activeQuestions.length - 1) { setCurrentQuestionIndex(prev => prev + 1); setAiSuggestions([]); } };
-    const prevQuestion = () => { if (currentQuestionIndex > 0) { setCurrentQuestionIndex(prev => prev - 1); setAiSuggestions([]); } };
+    const nextQuestion = () => { if (activeQuestions && currentQuestionIndex < activeQuestions.length - 1) { setCurrentQuestionIndex(prev => prev + 1); setBestInsight(null); } };
+    const prevQuestion = () => { if (currentQuestionIndex > 0) { setCurrentQuestionIndex(prev => prev - 1); setBestInsight(null); } };
 
     return (
         <div className="min-h-screen bg-black text-white">
@@ -1217,29 +1254,49 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
                 </motion.div>
               )}
 
-              {(aiSuggestions || []).length > 0 && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  className="space-y-3"
+              {bestInsight && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-5 bg-gray-900/60 border border-gray-700/50 rounded-xl space-y-4"
                 >
-                  {(aiSuggestions || []).map((suggestion, index) => (
-                    <motion.button 
-                      key={index} 
-                      initial={{ opacity: 0, x: -10 }} 
-                      animate={{ opacity: 1, x: 0 }} 
-                      transition={{ delay: index * 0.1 }} 
-                      whileHover={{ scale: 1.01, x: 4 }} 
-                      whileTap={{ scale: 0.99 }} 
-                      onClick={() => handleAnswer(currentQuestion.id as keyof PromptData, suggestion)} 
-                      className="w-full p-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-left transition-all group"
-                    >
-                      <div className="flex items-start space-x-3">
-                        <span className="text-amber-400 text-lg group-hover:scale-110 transition-transform">✨</span>
-                        <span className="text-gray-200 text-base leading-relaxed group-hover:text-white transition-colors">{suggestion}</span>
+                  <div className="flex items-start justify-between space-x-4">
+                    <div className="flex items-start space-x-3">
+                      <span className="text-amber-400 text-2xl">✨</span>
+                      <div className="space-y-2">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-amber-400">Dreamer Insight</div>
+                        <div className="text-gray-100 text-base leading-relaxed">{bestInsight.text}</div>
                       </div>
-                    </motion.button>
-                  ))}
+                    </div>
+                    <div className="flex flex-col items-end space-y-2">
+                      <span className="text-xs font-semibold text-gray-400 bg-gray-800/80 px-2 py-1 rounded-full">Score {bestInsight.score.toFixed(2)}</span>
+                      <div className="flex space-x-2">
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={copyBestInsight}
+                          className="flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-200"
+                        >
+                          <ClipboardCopy className="w-4 h-4" />
+                          <span>Copy</span>
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={applyBestInsight}
+                          className="flex items-center space-x-2 px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-lg text-sm text-amber-300"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          <span>Apply</span>
+                        </motion.button>
+                      </div>
+                    </div>
+                  </div>
+                  {bestInsight.rationale && (
+                    <div className="text-sm text-gray-400 leading-relaxed border-t border-gray-800/60 pt-3">
+                      <span className="text-gray-300 font-semibold">Why it helps:</span> {bestInsight.rationale}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </motion.div>

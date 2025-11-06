@@ -23,6 +23,41 @@ const NARRATIVE_BLOCKLIST = [
     'dialogue', 'beat', 'twist', 'act', 'scene arc', 'story arc', 'emotional arc', 'relationship'
 ];
 
+export interface CinematographyInsight {
+    text: string;
+    score: number;
+    source: 'knowledge' | 'ai';
+    rationale?: string;
+}
+
+export interface InsightResult {
+    bestSuggestion: CinematographyInsight | null;
+    rankedSuggestions: CinematographyInsight[];
+    relevantKnowledge: string[];
+}
+
+interface InsightCandidate {
+    text: string;
+    source: 'knowledge' | 'ai';
+    knowledgeRef?: string;
+    matchedElements?: string[];
+    matchedVisualCues?: string[];
+}
+
+interface NarrativeAnalysisSnapshot {
+    emotionalTone: string;
+    narrativeElements: string[];
+    visualCues: string[];
+    genre: string;
+}
+
+const DEFAULT_NARRATIVE_ANALYSIS: NarrativeAnalysisSnapshot = {
+    emotionalTone: 'neutral',
+    narrativeElements: ['storytelling'],
+    visualCues: ['composition', 'lighting'],
+    genre: 'drama'
+};
+
 const filterCinematographySuggestions = (suggestions: string[]): string[] => {
     return suggestions.filter(suggestion => {
         const lower = suggestion.toLowerCase();
@@ -89,7 +124,7 @@ const extractCleanSuggestions = (text: string): string[] => {
     const lines = text.split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0);
-    
+
     const suggestions: string[] = [];
     
     for (const line of lines) {
@@ -142,8 +177,80 @@ const extractCleanSuggestions = (text: string): string[] => {
         // Accept the line as a potential suggestion
         suggestions.push(cleanLine);
     }
-    
+
     return suggestions.filter(Boolean).slice(0, 6);
+};
+
+const rankInsights = (
+    candidates: InsightCandidate[],
+    narrativeAnalysis: NarrativeAnalysisSnapshot
+): CinematographyInsight[] => {
+    return candidates
+        .filter(candidate => candidate.text && candidate.text.trim().length > 0)
+        .map(candidate => {
+            const matchedElements = new Set(candidate.matchedElements || []);
+            const matchedVisualCues = new Set(candidate.matchedVisualCues || []);
+            const lowerText = candidate.text.toLowerCase();
+
+            narrativeAnalysis.narrativeElements.forEach(element => {
+                if (lowerText.includes(element.toLowerCase())) {
+                    matchedElements.add(element);
+                }
+            });
+
+            narrativeAnalysis.visualCues.forEach(cue => {
+                if (lowerText.includes(cue.toLowerCase())) {
+                    matchedVisualCues.add(cue);
+                }
+            });
+
+            let score = candidate.source === 'knowledge' ? 2 : 1.5;
+            score += matchedElements.size * 0.75;
+            score += matchedVisualCues.size * 1;
+
+            const toneMatch = narrativeAnalysis.emotionalTone && lowerText.includes(narrativeAnalysis.emotionalTone.toLowerCase());
+            if (toneMatch) {
+                score += 0.5;
+            }
+
+            if (CINEMATOGRAPHY_KEYWORDS.some(keyword => lowerText.includes(keyword))) {
+                score += 0.25;
+            }
+
+            const rationaleParts: string[] = [];
+
+            if (candidate.knowledgeRef) {
+                rationaleParts.push(`Anchored in ${candidate.knowledgeRef}.`);
+            }
+
+            if (matchedElements.size > 0) {
+                rationaleParts.push(`Reinforces narrative elements like ${Array.from(matchedElements).join(', ')}.`);
+            }
+
+            if (matchedVisualCues.size > 0) {
+                rationaleParts.push(`Targets visual cues such as ${Array.from(matchedVisualCues).join(', ')}.`);
+            }
+
+            if (toneMatch) {
+                rationaleParts.push(`Supports the ${narrativeAnalysis.emotionalTone.toLowerCase()} tone identified in analysis.`);
+            }
+
+            if (candidate.source === 'ai' && !candidate.knowledgeRef && rationaleParts.length === 0) {
+                rationaleParts.push('Synthesized from the scene context and cinematic cues.');
+            }
+
+            if (rationaleParts.length === 0) {
+                rationaleParts.push("Aligns with the scene's cinematography focus.");
+            }
+
+            return {
+                text: candidate.text,
+                source: candidate.source,
+                score: parseFloat(score.toFixed(2)),
+                rationale: rationaleParts.join(' ')
+            } as CinematographyInsight;
+        })
+        .sort((a, b) => b.score - a.score);
 };
 
 // Initialize GoogleGenAI with the Vite-provided Gemini API key.
@@ -293,13 +400,17 @@ export const extractKnowledge = async (content: string): Promise<ExtractedKnowle
   }
 };
 
-export const getAISuggestions = async (context: string, currentQuestion: string, knowledgeDocs: any[] = []): Promise<string[]> => {
-    try {
-        // Use HuggingFace for local analysis to enhance context
-        await huggingFaceService.initialize();
-        const narrativeAnalysis = await huggingFaceService.analyzeNarrative(context);
+export const getAISuggestions = async (
+    context: string,
+    currentQuestion: string,
+    _knowledgeDocs: any[] = []
+): Promise<InsightResult> => {
+    let narrativeAnalysis: NarrativeAnalysisSnapshot = DEFAULT_NARRATIVE_ANALYSIS;
 
-        // Enhance context with HuggingFace analysis
+    try {
+        await huggingFaceService.initialize();
+        narrativeAnalysis = await huggingFaceService.analyzeNarrative(context);
+
         const enhancedContext = `${context}\n\nNARRATIVE ANALYSIS (Local AI):\nGenre: ${narrativeAnalysis.genre}\nEmotional Tone: ${narrativeAnalysis.emotionalTone}\nVisual Cues: ${narrativeAnalysis.visualCues.join(', ')}\nNarrative Elements: ${narrativeAnalysis.narrativeElements.join(', ')}`;
 
         const response = await ai.models.generateContent({
@@ -320,10 +431,31 @@ Respond with cinematography suggestions only:`,
 
         const suggestionsText = response.text;
         const suggestions = extractCleanSuggestions(suggestionsText);
-        return await enforceCinematographyFocus(suggestions, enhancedContext, currentQuestion);
+        const focusedSuggestions = await enforceCinematographyFocus(suggestions, enhancedContext, currentQuestion);
+
+        const candidates: InsightCandidate[] = focusedSuggestions.map(suggestion => ({
+            text: suggestion,
+            source: 'ai'
+        }));
+
+        const rankedSuggestions = rankInsights(candidates, narrativeAnalysis);
+        return {
+            bestSuggestion: rankedSuggestions[0] ?? null,
+            rankedSuggestions,
+            relevantKnowledge: []
+        };
     } catch (error) {
         handleAIServiceError(error, 'Get AI Suggestions');
-        return [];
+        const fallbackCandidates: InsightCandidate[] = DEFAULT_CINEMATOGRAPHY_SUGGESTIONS.slice(0, 3).map(suggestion => ({
+            text: suggestion,
+            source: 'ai'
+        }));
+        const rankedSuggestions = rankInsights(fallbackCandidates, narrativeAnalysis);
+        return {
+            bestSuggestion: rankedSuggestions[0] ?? null,
+            rankedSuggestions,
+            relevantKnowledge: []
+        };
     }
 };
 
@@ -348,37 +480,38 @@ export const getRandomInspiration = async (context: string, currentQuestion: str
 
 // Enhanced function for knowledge-based suggestions
 export const getKnowledgeBasedSuggestions = async (
-    context: string, 
-    currentQuestion: string, 
+    context: string,
+    currentQuestion: string,
     knowledgeDocs: any[] = []
-): Promise<{
-    suggestions: string[];
-    relevantKnowledge: string[];
-}> => {
+): Promise<InsightResult> => {
+    let narrativeAnalysis: NarrativeAnalysisSnapshot = DEFAULT_NARRATIVE_ANALYSIS;
+
     try {
-        // Use HuggingFace for local analysis
         await huggingFaceService.initialize();
-        const narrativeAnalysis = await huggingFaceService.analyzeNarrative(context);
-        
-        // Find most relevant knowledge documents based on narrative analysis
+        narrativeAnalysis = await huggingFaceService.analyzeNarrative(context);
+
         const relevantKnowledge: string[] = [];
-        const knowledgeSuggestions: string[] = [];
+        const knowledgeCandidates: InsightCandidate[] = [];
+        const seenSuggestions = new Set<string>();
 
         knowledgeDocs.forEach(doc => {
-            const themes = doc.extractedKnowledge?.themes || [];
-            const techniques = doc.extractedKnowledge?.techniques || [];
-            const visualStyles = doc.extractedKnowledge?.visualStyles || [];
-            
-            // Check for relevance based on narrative analysis
-            const isRelevant = 
-                themes.some(theme => narrativeAnalysis.narrativeElements.some(el => el.toLowerCase().includes(theme.toLowerCase()))) ||
-                visualStyles.some(style => narrativeAnalysis.visualCues.some(cue => cue.toLowerCase().includes(style.toLowerCase())));
-            
-            if (isRelevant && techniques.length > 0) {
-                relevantKnowledge.push(`${doc.name}: ${techniques.slice(0, 2).join(', ')}`);
-                
-                // Generate knowledge-based suggestions
+            const themes: string[] = doc?.extractedKnowledge?.themes || [];
+            const techniques: string[] = doc?.extractedKnowledge?.techniques || [];
+            const visualStyles: string[] = doc?.extractedKnowledge?.visualStyles || [];
+
+            const matchedElements = narrativeAnalysis.narrativeElements.filter(element =>
+                themes.some(theme => element.toLowerCase().includes(theme.toLowerCase()))
+            );
+
+            const matchedVisuals = narrativeAnalysis.visualCues.filter(cue =>
+                visualStyles.some(style => cue.toLowerCase().includes(style.toLowerCase()))
+            );
+
+            if ((matchedElements.length > 0 || matchedVisuals.length > 0) && techniques.length > 0) {
+                relevantKnowledge.push(`${doc?.name || 'Knowledge'}: ${techniques.slice(0, 2).join(', ')}`);
+
                 techniques.slice(0, 2).forEach(technique => {
+                    const techniqueLower = technique.toLowerCase();
                     const narrativeTerms = [
                         ...NARRATIVE_BLOCKLIST,
                         'subtext', 'dialogue', 'character development', 'scene arc', 'screenplay',
@@ -386,22 +519,35 @@ export const getKnowledgeBasedSuggestions = async (
                         'growth', 'evolution', 'transformation'
                     ];
 
-                    const techniqueLower = technique.toLowerCase();
                     if (narrativeTerms.some(term => techniqueLower.includes(term))) {
-                        return; // Skip this technique
+                        return;
                     }
 
-                    const suggestion = `Apply ${technique.toLowerCase()} to elevate the visuals`;
-                    if (!knowledgeSuggestions.includes(suggestion)) {
-                        knowledgeSuggestions.push(suggestion);
+                    const suggestion = `Apply ${techniqueLower} to elevate the visuals.`;
+                    const normalized = suggestion.toLowerCase();
+                    if (seenSuggestions.has(normalized)) {
+                        return;
                     }
+
+                    seenSuggestions.add(normalized);
+
+                    if (filterCinematographySuggestions([suggestion]).length === 0) {
+                        return;
+                    }
+
+                    knowledgeCandidates.push({
+                        text: suggestion,
+                        source: 'knowledge',
+                        knowledgeRef: doc?.name,
+                        matchedElements,
+                        matchedVisualCues: matchedVisuals
+                    });
                 });
             }
         });
 
-        // Get AI-generated suggestions with enhanced context
         const enhancedContext = `${context}\n\nRELEVANT KNOWLEDGE: ${relevantKnowledge.join(' | ')}\nNARRATIVE TYPE: ${narrativeAnalysis.genre} (${narrativeAnalysis.emotionalTone})`;
-        
+
         const aiResponse = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
             contents: `Based on this context, provide 2-3 cinematography-forward ideas for: "${currentQuestion}"
@@ -414,22 +560,31 @@ Respond with cinematography-focused ideas only:`,
         });
 
         const aiSuggestions = extractCleanSuggestions(aiResponse.text);
+        const focusedAiSuggestions = await enforceCinematographyFocus(aiSuggestions, enhancedContext, currentQuestion);
+        const aiCandidates: InsightCandidate[] = focusedAiSuggestions.map(suggestion => ({
+            text: suggestion,
+            source: 'ai'
+        }));
 
-        // Combine knowledge-based and AI suggestions and enforce cinematography focus
-        const combinedSuggestions = [
-            ...knowledgeSuggestions,
-            ...aiSuggestions
-        ];
-
-        const focusedSuggestions = await enforceCinematographyFocus(combinedSuggestions, enhancedContext, currentQuestion);
+        const rankedSuggestions = rankInsights([...knowledgeCandidates, ...aiCandidates], narrativeAnalysis);
 
         return {
-            suggestions: focusedSuggestions,
+            bestSuggestion: rankedSuggestions[0] ?? null,
+            rankedSuggestions,
             relevantKnowledge
         };
     } catch (error) {
         handleAIServiceError(error, 'Knowledge-Based Suggestions');
-        return { suggestions: [], relevantKnowledge: [] };
+        const fallbackCandidates: InsightCandidate[] = DEFAULT_CINEMATOGRAPHY_SUGGESTIONS.slice(0, 3).map(suggestion => ({
+            text: suggestion,
+            source: 'ai'
+        }));
+        const rankedSuggestions = rankInsights(fallbackCandidates, narrativeAnalysis);
+        return {
+            bestSuggestion: rankedSuggestions[0] ?? null,
+            rankedSuggestions,
+            relevantKnowledge: []
+        };
     }
 };
 
