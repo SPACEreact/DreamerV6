@@ -344,9 +344,9 @@ class SupabaseHistoryService {
       return {
         total: history.length,
         byType: {
-          image: history.filter(h => h.type === 'image').length,
           audio: history.filter(h => h.type === 'audio').length,
-          casting: history.filter(h => h.type === 'casting').length
+          casting: history.filter(h => h.type === 'casting').length,
+          video: history.filter(h => h.type === 'video').length
         },
         favorites: history.filter(h => h.favorite).length,
         averageRating: history.length > 0
@@ -357,7 +357,7 @@ class SupabaseHistoryService {
     } catch (error) {
       return {
         total: 0,
-        byType: { image: 0, audio: 0, casting: 0 },
+        byType: { audio: 0, casting: 0, video: 0 },
         favorites: 0,
         averageRating: 0,
         ratedItems: 0

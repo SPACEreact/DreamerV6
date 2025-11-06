@@ -268,7 +268,7 @@ const openPrintDialog = (htmlContent: string): void => {
  */
 export const batchExport = async (
   items: Array<{
-    type: 'image' | 'audio' | 'casting';
+    type: 'audio' | 'casting' | 'video';
     url?: string;
     data?: any;
     filename: string;
@@ -276,12 +276,12 @@ export const batchExport = async (
 ): Promise<void> => {
   for (const item of items) {
     try {
-      if (item.type === 'image' && item.url) {
-        await exportImage(item.url, item.filename);
-      } else if (item.type === 'audio' && item.url) {
+      if (item.type === 'audio' && item.url) {
         await exportAudio(item.url, item.filename);
       } else if (item.type === 'casting' && item.data) {
         exportCastingReport(item.data, 'txt');
+      } else if (item.type === 'video' && typeof item.data === 'string') {
+        await navigator.clipboard.writeText(item.data);
       }
       // Add small delay between downloads
       await new Promise(resolve => setTimeout(resolve, 500));

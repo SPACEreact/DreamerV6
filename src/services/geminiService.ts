@@ -2,7 +2,7 @@
 
 
 
-import { GoogleGenAI, Modality, Type } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { ExtractedKnowledge, StoryboardShot, SequenceStyle, CompositionData, LightingData, ColorGradingData, CameraMovementData, CompositionCharacter, AudioMoodTag, AudioSuggestion, FoleySuggestion, CharacterAnalysis, CastingSuggestion } from "../types";
 import { huggingFaceService } from "./huggingFaceService";
 import { geminiLogger } from '../lib/logger';
@@ -459,72 +459,6 @@ export const enhanceShotPrompt = async (basePrompt: string, context: string): Pr
     } catch (error) {
         handleAIServiceError(error, 'Shot Enhancement');
         throw new Error("Failed to enhance prompt.");
-    }
-};
-
-export const generateImage = async (prompt: string, aspectRatio: string = '16:9', style: 'cinematic' | 'explainer' = 'cinematic'): Promise<string> => {
-    try {
-      const stylePrefix = style === 'explainer'
-        ? 'A clean, simple, engaging illustration for an explainer video. The style should be modern, with clear lines and friendly colors. Focus on communicating the core idea of the prompt clearly.'
-        : 'Create a cinematic, photorealistic image based on the following detailed prompt. Emphasize mood, lighting, and composition.';
-
-      const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: `${stylePrefix} ${prompt}`,
-        config: {
-          numberOfImages: 1,
-          outputMimeType: 'image/jpeg',
-          aspectRatio: aspectRatio,
-        },
-      });
-  
-      if (response.generatedImages && response.generatedImages.length > 0) {
-        return response.generatedImages[0].image.imageBytes;
-      } else {
-        throw new Error("No image was generated.");
-      }
-    } catch (error) {
-      handleAIServiceError(error, 'Image Generation');
-      throw new Error("Failed to generate image.");
-    }
-};
-
-export const generateNanoImage = async (prompt: string, style: 'cinematic' | 'explainer' = 'cinematic'): Promise<string> => {
-    try {
-        const stylePrefix = style === 'explainer'
-            ? 'A stylized, modern, and simple illustration for an explainer video. Focus on clarity, visual appeal, and effective communication of the core concept.'
-            : 'A cinematic, stylized image based on the following detailed prompt. Emphasize mood, lighting, and composition.';
-        
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: {
-              parts: [{ text: `${stylePrefix} ${prompt}` }],
-            },
-            config: {
-                responseModalities: [Modality.IMAGE],
-            },
-        });
-
-        // Sanitize response before processing
-        if (!response.candidates || response.candidates.length === 0) {
-            throw new Error("No candidates returned from API");
-        }
-
-        const firstCandidate = response.candidates[0];
-        if (!firstCandidate.content || !firstCandidate.content.parts || firstCandidate.content.parts.length === 0) {
-            throw new Error("No content parts in response candidate");
-        }
-
-        for (const part of firstCandidate.content.parts) {
-            if (part.inlineData) {
-                return part.inlineData.data;
-            }
-        }
-        throw new Error("No image data found in response.");
-
-    } catch (error) {
-        handleAIServiceError(error, 'Nano Image Generation');
-        throw new Error("Failed to generate nano image.");
     }
 };
 
