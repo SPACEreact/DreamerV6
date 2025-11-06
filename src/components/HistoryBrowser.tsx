@@ -17,7 +17,8 @@ import {
   X,
   ChevronDown,
   Calendar,
-  Tag
+  Tag,
+  Film
 } from 'lucide-react';
 import { historyService, GenerationHistoryItem, HistoryFilter } from '../services/historyService';
 import { StarRating } from './StarRating';
