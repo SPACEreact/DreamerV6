@@ -59,7 +59,6 @@ import { originalQuestions, getPhaseForQuestion, phaseMetadata } from './constan
 import { ProgressBoxes } from './components/ProgressBoxes';
 import { StoryIdeationModal } from './components/StoryIdeationModal';
 import { PromptsExport } from './components/PromptsExport';
-import { OldSoundTab } from './components/OldSoundTab';
 import { appLogger } from './lib/logger';
 import { StoryContext } from './services/storyIdeationService';
 import {
@@ -83,13 +82,7 @@ import {
     BrollItem,
     TransitionItem,
     TextItem,
-    SoundDesignData,
-    CastingData,
 } from './types';
-import { SoundDesignModule } from './components/SoundDesignModule';
-import { CastingAssistant } from './components/CastingAssistant';
-// import { DualProviderCastingAssistant } from './components/DualProviderCastingAssistant';
-import { DualProviderAudioGeneration } from './components/DualProviderAudioGeneration';
 import { VisualProgressTracker } from './components/VisualProgressTracker';
 import { StoryIdeation } from './components/StoryIdeation';
 
@@ -2229,10 +2222,10 @@ interface VisualSequenceEditorProps {
         data: T
     ) => void;
     updatePromptFromVisuals: (timelineItemId: string) => void;
-    soundDesignData: Record<string, SoundDesignData>;
-    setSoundDesignData: React.Dispatch<React.SetStateAction<Record<string, SoundDesignData>>>;
-    castingData: Record<string, CastingData>;
-    setCastingData: React.Dispatch<React.SetStateAction<Record<string, CastingData>>>;
+    aspectRatios: Record<string, string>;
+    setAspectRatios: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+    styles: Record<string, 'cinematic' | 'explainer'>;
+    setStyles: React.Dispatch<React.SetStateAction<Record<string, 'cinematic' | 'explainer'>>>;
     deleteTimelineItem: (id: string) => void;
 }
 
@@ -2258,20 +2251,20 @@ interface SelectedItemPanelProps {
     cameraMovement: Record<string, CameraMovementData>;
     updateVisuals: (id: string, dataType: 'compositions' | 'lightingData' | 'colorGradingData' | 'cameraMovement', data: any) => void;
     updatePromptFromVisuals: (id: string) => Promise<void>;
-    // Sound Design & Casting Props
-    soundDesignData: Record<string, SoundDesignData>;
-    setSoundDesignData: React.Dispatch<React.SetStateAction<Record<string, SoundDesignData>>>;
-    castingData: Record<string, CastingData>;
-    setCastingData: React.Dispatch<React.SetStateAction<Record<string, CastingData>>>;
+    aspectRatios: Record<string, string>;
+    setAspectRatios: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+    styles: Record<string, 'cinematic' | 'explainer'>;
+    setStyles: React.Dispatch<React.SetStateAction<Record<string, 'cinematic' | 'explainer'>>>;
 }
 
 
 const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
     item, updateItem, onEnhance, onRevert, onGenerateVideoPrompt, generatedContent,
     compositions, lightingData, colorGradingData, cameraMovement, updateVisuals, updatePromptFromVisuals,
-    soundDesignData, setSoundDesignData, castingData, setCastingData
+    aspectRatios, setAspectRatios, styles, setStyles,
 }) => {
-    const [activeVisualTab, setActiveVisualTab] = useState<'composition' | 'lighting' | 'color' | 'camera' | 'sound' | 'casting'>('composition');
+    const [activeVisualTab, setActiveVisualTab] = useState<'composition' | 'lighting' | 'color' | 'camera'>('composition');
+    const [imageView, setImageView] = useState<'photoreal' | 'stylized'>('photoreal');
     const [isUpdatingPrompt, setIsUpdatingPrompt] = useState(false);
     const [copiedModel, setCopiedModel] = useState<string | null>(null);
     const [showCopyMenu, setShowCopyMenu] = useState(false);
@@ -2665,7 +2658,7 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                     </button>
                  </div>
                  <div className="flex items-center space-x-2 mb-2 border-b border-gray-800 overflow-x-auto">
-                    {(['composition', 'lighting', 'color', 'camera', 'sound', 'casting'] as const).map(tab => (
+                    {(['composition', 'lighting', 'color', 'camera'] as const).map(tab => (
                         <button key={tab} onClick={() => setActiveVisualTab(tab)} className={`px-4 py-2 text-sm capitalize rounded-t-lg transition-colors whitespace-nowrap ${activeVisualTab === tab ? 'bg-gray-800 text-amber-400' : 'text-gray-400 hover:bg-gray-900'}`}>
                             {tab}
                         </button>
@@ -2686,32 +2679,6 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                         {activeVisualTab === 'lighting' && <LightingEditor lighting={visualData.lighting} onChange={onLightingChange} />}
                         {activeVisualTab === 'color' && <ColorGradingEditor color={visualData.color} onChange={onColorChange} />}
                         {activeVisualTab === 'camera' && <CameraMovementEditor camera={visualData.camera} onChange={onCameraChange} onPathChange={onCameraPathChange}/>}
-                        {activeVisualTab === 'sound' && <OldSoundTab
-                            initialDescription={`${shotData.description} with ${visualData.lighting.mood} lighting and ${visualData.camera.movementType} camera movement`}
-                            onGenerate={(audioData) => {
-                                // Convert to SoundDesignData format
-                                const soundData: SoundDesignData = {
-                                    mood: audioData.mood ? [audioData.mood.toLowerCase() as any] : [],
-                                    categories: audioData.types || [],
-                                    suggestions: [{
-                                        id: crypto.randomUUID(),
-                                        description: audioData.description || '',
-                                        duration: audioData.intensity || 5,
-                                        mood: (audioData.mood?.toLowerCase() || 'neutral') as any,
-                                        category: (audioData.types[0] || 'ambient') as any
-                                    }],
-                                    foley: []
-                                };
-                                setSoundDesignData(prev => ({ ...prev, [item.id]: soundData }));
-                            }}
-                        />}
-                        {activeVisualTab === 'casting' && <CastingAssistant
-                            characters={(visualData?.composition?.characters || []).filter(c => c).map(c => c?.name ?? 'Character')}
-                            sceneDescription={shotData.description}
-                            onCastingDataUpdate={(data) => {
-                                setCastingData(prev => ({ ...prev, [item.id]: data }));
-                            }}
-                        />}
                     </motion.div>
                 </AnimatePresence>
             </div>
@@ -2731,10 +2698,10 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
         lightingData,
         colorGradingData,
         cameraMovement,
-        soundDesignData,
-        setSoundDesignData,
-        castingData,
-        setCastingData,
+        aspectRatios,
+        setAspectRatios,
+        styles,
+        setStyles,
         deleteTimelineItem,
     } = props;
     
@@ -3113,10 +3080,10 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
                                 cameraMovement={cameraMovement}
                                 updateVisuals={updateVisuals}
                                 updatePromptFromVisuals={props.updatePromptFromVisuals as (id: string) => Promise<void>}
-                                soundDesignData={soundDesignData}
-                                setSoundDesignData={setSoundDesignData}
-                                castingData={castingData}
-                                setCastingData={setCastingData}
+                                aspectRatios={aspectRatios}
+                                setAspectRatios={setAspectRatios}
+                                styles={styles}
+                                setStyles={setStyles}
                            />
                         ) : (
                             <div className="flex-grow flex items-center justify-center text-gray-500 bg-gray-950/70 border border-gray-800 rounded-xl">
@@ -3376,9 +3343,6 @@ export default function App() {
     const [colorGradingData, setColorGradingData] = useState<Record<string, ColorGradingData>>({});
     const [cameraMovement, setCameraMovement] = useState<Record<string, CameraMovementData>>({});
     
-    // Sound Design & Casting State
-    const [soundDesignData, setSoundDesignData] = useState<Record<string, SoundDesignData>>({});
-    const [castingData, setCastingData] = useState<Record<string, CastingData>>({});
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [isLoadingProgress, setIsLoadingProgress] = useState(true);
 
@@ -4068,10 +4032,10 @@ export default function App() {
             cameraMovement={cameraMovement}
             updateVisuals={updateVisuals}
             updatePromptFromVisuals={updatePromptFromVisualsLogic}
-            soundDesignData={soundDesignData}
-            setSoundDesignData={setSoundDesignData}
-            castingData={castingData}
-            setCastingData={setCastingData}
+            aspectRatios={aspectRatios}
+            setAspectRatios={setAspectRatios}
+            styles={styles}
+            setStyles={setStyles}
             deleteTimelineItem={deleteTimelineItem}
             showCollaboration={false}
             setShowCollaboration={() => {}}

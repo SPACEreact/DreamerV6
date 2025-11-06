@@ -1,28 +1,30 @@
 /**
- * AI Module Collaboration Service
- * Enables communication and collaboration between sound design, casting, and visual modules
+ * Visual Collaboration Service
+ * Lightweight utility for tracking visual insights and generating
+ * recommendations for storyboard and style development.
  */
 
+export type VisualFocus = 'composition' | 'lighting' | 'color' | 'camera' | 'general';
+
 export interface ModuleInsight {
-  module: 'sound' | 'casting' | 'visual';
+  module: 'visual';
+  focus: VisualFocus;
   insight: string;
   relevance: 'high' | 'medium' | 'low';
   actionable: boolean;
   sharedData?: any;
 }
 
-export interface CrossModuleSuggestion {
-  type: 'sync' | 'contrast' | 'enhance' | 'balance';
-  modules: string[];
+export interface VisualRecommendation {
+  focus: VisualFocus;
   suggestion: string;
-  rationale: string;
   priority: 'high' | 'medium' | 'low';
+  rationale: string;
 }
 
 export class ModuleCollaborationService {
   private static instance: ModuleCollaborationService;
-  private insights: Map<string, ModuleInsight[]> = new Map();
-  private crossModuleSuggestions: CrossModuleSuggestion[] = [];
+  private insights: ModuleInsight[] = [];
 
   static getInstance(): ModuleCollaborationService {
     if (!ModuleCollaborationService.instance) {
@@ -31,246 +33,209 @@ export class ModuleCollaborationService {
     return ModuleCollaborationService.instance;
   }
 
-  // Store insights from individual modules
-  addModuleInsight(module: 'sound' | 'casting' | 'visual', insight: string, relevance: 'high' | 'medium' | 'low' = 'medium', sharedData?: any): void {
+  /**
+   * Store a new visual insight.
+   */
+  addVisualInsight(
+    insight: string,
+    options: {
+      focus?: VisualFocus;
+      relevance?: 'high' | 'medium' | 'low';
+      actionable?: boolean;
+      sharedData?: any;
+    } = {}
+  ): void {
+    const {
+      focus = 'general',
+      relevance = 'medium',
+      actionable = true,
+      sharedData
+    } = options;
+
     const newInsight: ModuleInsight = {
-      module,
+      module: 'visual',
+      focus,
       insight,
       relevance,
-      actionable: true,
+      actionable,
       sharedData
     };
 
-    const moduleInsights = this.insights.get(module) || [];
-    moduleInsights.push(newInsight);
-    this.insights.set(module, moduleInsights);
-
-    // Trigger cross-module analysis
-    this.analyzeCrossModuleSynergies();
+    this.insights.push(newInsight);
   }
 
-  // Generate cross-module suggestions
-  private analyzeCrossModuleSynergies(): void {
-    const soundInsights = this.insights.get('sound') || [];
-    const castingInsights = this.insights.get('casting') || [];
-    const visualInsights = this.insights.get('visual') || [];
-
-    this.crossModuleSuggestions = [];
-
-    // Sound-Visual Synergies
-    const soundVisualSync = this.findSoundVisualSync(soundInsights, visualInsights);
-    if (soundVisualSync) {
-      this.crossModuleSuggestions.push({
-        type: 'sync',
-        modules: ['sound', 'visual'],
-        ...soundVisualSync
-      });
-    }
-
-    // Sound-Casting Contrasts
-    const soundCastingContrast = this.findSoundCastingContrast(soundInsights, castingInsights);
-    if (soundCastingContrast) {
-      this.crossModuleSuggestions.push({
-        type: 'contrast',
-        modules: ['sound', 'casting'],
-        ...soundCastingContrast
-      });
-    }
-
-    // Visual-Casting Balance
-    const visualCastingBalance = this.findVisualCastingBalance(visualInsights, castingInsights);
-    if (visualCastingBalance) {
-      this.crossModuleSuggestions.push({
-        type: 'balance',
-        modules: ['visual', 'casting'],
-        ...visualCastingBalance
-      });
-    }
-
-    // All three modules enhancement
-    const allModuleEnhancement = this.findAllModuleEnhancement(soundInsights, castingInsights, visualInsights);
-    if (allModuleEnhancement) {
-      this.crossModuleSuggestions.push({
-        type: 'enhance',
-        modules: ['sound', 'casting', 'visual'],
-        ...allModuleEnhancement
-      });
-    }
-  }
-
-  private findSoundVisualSync(soundInsights: ModuleInsight[], visualInsights: ModuleInsight[]) {
-    // Look for mood/tone matches between sound and visual
-    const soundMood = soundInsights.find(i => i.insight.includes('mood') || i.insight.includes('atmosphere'));
-    const visualMood = visualInsights.find(i => i.insight.includes('lighting') || i.insight.includes('color'));
-
-    if (soundMood && visualMood) {
-      return {
-        suggestion: 'Align sound atmosphere with visual mood for cohesive storytelling',
-        rationale: 'Both sound and visual elements suggest similar atmospheric qualities',
-        priority: 'high' as const
-      };
-    }
-
-    // Look for energy level matches
-    const soundEnergy = soundInsights.find(i => i.insight.includes('energy') || i.insight.includes('intensity'));
-    const visualEnergy = visualInsights.find(i => i.insight.includes('movement') || i.insight.includes('camera'));
-
-    if (soundEnergy && visualEnergy) {
-      return {
-        suggestion: 'Synchronize audio intensity with visual camera movement',
-        rationale: 'Both elements indicate matching energy levels for dynamic sequences',
-        priority: 'high' as const
-      };
-    }
-
-    return null;
-  }
-
-  private findSoundCastingContrast(soundInsights: ModuleInsight[], castingInsights: ModuleInsight[]) {
-    // Look for character type vs sound personality contrasts
-    const strongCharacter = castingInsights.find(i => i.insight.includes('strong') || i.insight.includes('confident'));
-    const gentleSound = soundInsights.find(i => i.insight.includes('soft') || i.insight.includes('gentle'));
-
-    if (strongCharacter && gentleSound) {
-      return {
-        suggestion: 'Use gentle sound design to contrast with strong character presence',
-        rationale: 'Creates interesting juxtaposition between visual character strength and audio subtlety',
-        priority: 'medium' as const
-      };
-    }
-
-    return null;
-  }
-
-  private findVisualCastingBalance(visualInsights: ModuleInsight[], castingInsights: ModuleInsight[]) {
-    // Look for color schemes that complement character types
-    const warmVisual = visualInsights.find(i => i.insight.includes('warm') || i.insight.includes('golden'));
-    const seriousCharacter = castingInsights.find(i => i.insight.includes('serious') || i.insight.includes('professional'));
-
-    if (warmVisual && seriousCharacter) {
-      return {
-        suggestion: 'Balance serious character presence with warm visual color grading',
-        rationale: 'Warm colors can soften serious characters and create emotional depth',
-        priority: 'medium' as const
-      };
-    }
-
-    return null;
-  }
-
-  private findAllModuleEnhancement(soundInsights: ModuleInsight[], castingInsights: ModuleInsight[], visualInsights: ModuleInsight[]) {
-    // Look for overall theme coherence
-    const themes = [
-      ...soundInsights.filter(i => i.insight.includes('theme') || i.insight.includes('emotion')),
-      ...castingInsights.filter(i => i.insight.includes('theme') || i.insight.includes('emotion')),
-      ...visualInsights.filter(i => i.insight.includes('theme') || i.insight.includes('emotion'))
-    ];
-
-    if (themes.length >= 2) {
-      return {
-        suggestion: 'Strengthen thematic coherence across all three modules',
-        rationale: 'Multiple modules suggest consistent thematic elements - reinforce this connection',
-        priority: 'high' as const
-      };
-    }
-
-    return null;
-  }
-
-  // Get all cross-module suggestions
-  getCrossModuleSuggestions(): CrossModuleSuggestion[] {
-    return this.crossModuleSuggestions.sort((a, b) => {
-      const priorityOrder = { high: 3, medium: 2, low: 1 };
-      return priorityOrder[b.priority] - priorityOrder[a.priority];
-    });
-  }
-
-  // Get insights from specific module
-  getModuleInsights(module: 'sound' | 'casting' | 'visual'): ModuleInsight[] {
-    return this.insights.get(module) || [];
-  }
-
-  // Get combined insights from all modules
+  /**
+   * Retrieve all recorded insights.
+   */
   getAllInsights(): ModuleInsight[] {
-    return Array.from(this.insights.values()).flat();
+    return [...this.insights];
   }
 
-  // Clear insights (useful when starting new projects)
+  /**
+   * Remove all stored insights – useful when starting a fresh project.
+   */
   clearInsights(): void {
-    this.insights.clear();
-    this.crossModuleSuggestions = [];
+    this.insights = [];
   }
 
-  // Generate module-specific collaboration tips
-  generateCollaborationTips(module: 'sound' | 'casting' | 'visual'): string[] {
-    const tips: string[] = [];
-    
-    switch (module) {
-      case 'sound':
-        tips.push('Consider how your sound design will complement or contrast with visual lighting choices');
-        tips.push('Match character emotional states through both sound and casting decisions');
-        tips.push('Use sound to enhance character presence established through casting');
-        break;
-        
-      case 'casting':
-        tips.push('Consider visual style when selecting actors that fit the aesthetic mood');
-        tips.push('Match character energy levels to match intended sound atmosphere');
-        tips.push('Think about how casting choices will influence both sound and visual decisions');
-        break;
-        
-      case 'visual':
-        tips.push('Coordinate visual mood with sound design for cohesive storytelling');
-        tips.push('Consider casting choices when developing visual character presentation');
-        tips.push('Use visual elements to support the narrative suggested by sound design');
-        break;
+  /**
+   * Generate recommendations based on current insight coverage.
+   */
+  getRecommendations(): VisualRecommendation[] {
+    if (this.insights.length === 0) {
+      return [
+        {
+          focus: 'general',
+          suggestion: 'Document key takeaways from recent reviews to guide the next visual pass.',
+          priority: 'medium',
+          rationale: 'No visual insights have been captured yet.'
+        }
+      ];
     }
-    
-    return tips;
+
+    const focusCounts: Record<VisualFocus, number> = {
+      composition: 0,
+      lighting: 0,
+      color: 0,
+      camera: 0,
+      general: 0
+    };
+
+    const highRelevanceByFocus: Record<VisualFocus, number> = {
+      composition: 0,
+      lighting: 0,
+      color: 0,
+      camera: 0,
+      general: 0
+    };
+
+    const lowInsights = this.insights.filter(i => i.relevance === 'low').length;
+
+    for (const insight of this.insights) {
+      focusCounts[insight.focus] += 1;
+      if (insight.relevance === 'high') {
+        highRelevanceByFocus[insight.focus] += 1;
+      }
+    }
+
+    const recommendations: VisualRecommendation[] = [];
+
+    const focusGuidance: Record<Exclude<VisualFocus, 'general'>, VisualRecommendation> = {
+      composition: {
+        focus: 'composition',
+        suggestion: 'Capture staging notes so blocking stays aligned with story beats.',
+        priority: 'medium',
+        rationale: 'Composition insights are missing – outline subject placement for upcoming shots.'
+      },
+      lighting: {
+        focus: 'lighting',
+        suggestion: 'Define lighting ratios or key motifs to preserve the intended mood.',
+        priority: 'medium',
+        rationale: 'Lighting direction has not been documented for this sequence.'
+      },
+      color: {
+        focus: 'color',
+        suggestion: 'Summarize palette decisions to keep grading consistent between frames.',
+        priority: 'medium',
+        rationale: 'Color considerations are absent from the current insight set.'
+      },
+      camera: {
+        focus: 'camera',
+        suggestion: 'Outline camera moves and lens choices to coordinate previs with production.',
+        priority: 'medium',
+        rationale: 'Camera movement notes are missing and should be recorded.'
+      }
+    };
+
+    (Object.keys(focusGuidance) as Array<Exclude<VisualFocus, 'general'>>).forEach(focus => {
+      if (focusCounts[focus] === 0) {
+        recommendations.push(focusGuidance[focus]);
+      }
+    });
+
+    const dominantFocus = (['composition', 'lighting', 'color', 'camera'] as VisualFocus[])
+      .map(focus => ({ focus, high: highRelevanceByFocus[focus] }))
+      .sort((a, b) => b.high - a.high)[0];
+
+    if (dominantFocus && dominantFocus.high >= 2) {
+      recommendations.push({
+        focus: dominantFocus.focus,
+        suggestion: `Elevate the ${dominantFocus.focus} work into a style reference for the team.`,
+        priority: 'medium',
+        rationale: 'Multiple high-value insights target this focus area – consolidate them into a shareable artifact.'
+      });
+    }
+
+    if (lowInsights > 0) {
+      recommendations.push({
+        focus: 'general',
+        suggestion: 'Review low-confidence notes and clarify any open visual questions.',
+        priority: lowInsights > 2 ? 'high' : 'medium',
+        rationale: `${lowInsights} insight${lowInsights === 1 ? '' : 's'} marked low relevance may need follow-up.`
+      });
+    }
+
+    return recommendations;
   }
 
-  // Analyze overall project coherence
+  /**
+   * Analyse overall project coherence from the collected insights.
+   */
   analyzeProjectCoherence(): {
     score: number;
     strengths: string[];
     weaknesses: string[];
     recommendations: string[];
   } {
-    const allInsights = this.getAllInsights();
-    const suggestions = this.getCrossModuleSuggestions();
-    
-    let coherenceScore = 50; // Base score
-    
-    // Boost score based on high-relevance insights
-    const highRelevanceInsights = allInsights.filter(i => i.relevance === 'high').length;
-    coherenceScore += highRelevanceInsights * 10;
-    
-    // Adjust based on cross-module suggestions
-    const highPrioritySuggestions = suggestions.filter(s => s.priority === 'high').length;
-    const lowPrioritySuggestions = suggestions.filter(s => s.priority === 'low').length;
-    
-    coherenceScore += highPrioritySuggestions * 5;
-    coherenceScore -= lowPrioritySuggestions * 3;
-    
-    coherenceScore = Math.max(0, Math.min(100, coherenceScore));
-    
-    const strengths = [
-      'Multiple AI modules providing insights',
-      'Cross-module collaboration active',
-      'Diverse perspectives enhancing storytelling'
-    ];
-    
-    const weaknesses = [];
-    if (suggestions.length === 0) {
-      weaknesses.push('Limited cross-module interaction detected');
+    if (this.insights.length === 0) {
+      return {
+        score: 40,
+        strengths: ['Visual collaboration has not started yet.'],
+        weaknesses: ['No visual insights captured to guide decision making.'],
+        recommendations: [
+          'Log the latest storyboard feedback before the next iteration.',
+          'Add lighting or color notes to establish the project mood.'
+        ]
+      };
     }
-    if (highPrioritySuggestions > 2) {
-      weaknesses.push('Multiple high-priority improvements suggested');
+
+    const highCount = this.insights.filter(i => i.relevance === 'high').length;
+    const lowCount = this.insights.filter(i => i.relevance === 'low').length;
+    const focusCoverage = new Set(
+      this.insights
+        .filter(i => i.focus !== 'general')
+        .map(i => i.focus)
+    );
+
+    let score = 55;
+    score += highCount * 8;
+    score += focusCoverage.size * 6;
+    score -= lowCount * 4;
+    score = Math.max(0, Math.min(100, score));
+
+    const strengths: string[] = [];
+    if (highCount > 0) {
+      strengths.push('High-value visual insights captured.');
     }
-    
-    const recommendations = suggestions.slice(0, 3).map(s => s.suggestion);
-    
+    if (focusCoverage.size >= 3) {
+      strengths.push('Multiple visual disciplines are represented in the notes.');
+    }
+    if (strengths.length === 0) {
+      strengths.push('Initial visual insights available for review.');
+    }
+
+    const weaknesses: string[] = [];
+    if (focusCoverage.size < 2) {
+      weaknesses.push('Visual documentation is concentrated in a single area.');
+    }
+    if (lowCount > highCount) {
+      weaknesses.push('Several insights are low-confidence and require clarification.');
+    }
+
+    const recommendations = this.getRecommendations().slice(0, 3).map(r => r.suggestion);
+
     return {
-      score: coherenceScore,
+      score,
       strengths,
       weaknesses,
       recommendations
@@ -278,5 +243,4 @@ export class ModuleCollaborationService {
   }
 }
 
-// Export singleton instance
 export const moduleCollaborationService = ModuleCollaborationService.getInstance();

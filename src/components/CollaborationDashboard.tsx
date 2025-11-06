@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Users, Music, Palette, Camera, TrendingUp, AlertCircle } from 'lucide-react';
-import { moduleCollaborationService } from '../services/moduleCollaborationService';
+import { Palette, Camera, Sparkles, Lightbulb, LayoutGrid } from 'lucide-react';
+import { moduleCollaborationService, VisualFocus } from '../services/moduleCollaborationService';
 
 interface CollaborationDashboardProps {
   visible: boolean;
@@ -12,21 +12,39 @@ export const CollaborationDashboard: React.FC<CollaborationDashboardProps> = ({ 
   if (!visible) return null;
 
   const insights = moduleCollaborationService.getAllInsights();
-  const suggestions = moduleCollaborationService.getCrossModuleSuggestions();
+  const recommendations = moduleCollaborationService.getRecommendations();
   const coherence = moduleCollaborationService.analyzeProjectCoherence();
 
-  const moduleIcons = {
-    sound: Music,
-    casting: Users,
-    visual: Camera
+  const focusLabels: Record<VisualFocus, string> = {
+    composition: 'Composition',
+    lighting: 'Lighting',
+    color: 'Color',
+    camera: 'Camera',
+    general: 'General'
   };
 
-  const typeColors = {
-    sync: 'bg-green-900/20 border-green-700/30 text-green-400',
-    contrast: 'bg-yellow-900/20 border-yellow-700/30 text-yellow-400',
-    enhance: 'bg-blue-900/20 border-blue-700/30 text-blue-400',
-    balance: 'bg-purple-900/20 border-purple-700/30 text-purple-400'
+  const focusIcons: Record<VisualFocus, React.ElementType> = {
+    composition: LayoutGrid,
+    lighting: Lightbulb,
+    color: Palette,
+    camera: Camera,
+    general: Sparkles
   };
+
+  const priorityStyles: Record<'high' | 'medium' | 'low', string> = {
+    high: 'border-red-500/40 bg-red-500/10',
+    medium: 'border-amber-500/40 bg-amber-500/10',
+    low: 'border-blue-500/40 bg-blue-500/10'
+  };
+
+  const groupedInsights = insights.reduce<Record<VisualFocus, typeof insights>>((acc, insight) => {
+    const focus = insight.focus ?? 'general';
+    if (!acc[focus]) {
+      acc[focus] = [];
+    }
+    acc[focus].push(insight);
+    return acc;
+  }, { composition: [], lighting: [], color: [], camera: [], general: [] });
 
   return (
     <motion.div
@@ -46,8 +64,8 @@ export const CollaborationDashboard: React.FC<CollaborationDashboardProps> = ({ 
         <div className="p-6 border-b border-gray-800">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white flex items-center space-x-2">
-              <Users className="w-5 h-5 text-amber-500" />
-              <span>AI Module Collaboration</span>
+              <Sparkles className="w-5 h-5 text-amber-500" />
+              <span>Visual Collaboration</span>
             </h2>
             <button
               onClick={onClose}
@@ -117,45 +135,41 @@ export const CollaborationDashboard: React.FC<CollaborationDashboardProps> = ({ 
             </div>
           </div>
 
-          {/* Cross-Module Suggestions */}
+          {/* Visual Recommendations */}
           <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
             <h3 className="text-lg font-medium text-white mb-4 flex items-center space-x-2">
-              <TrendingUp className="w-5 h-5 text-purple-500" />
-              <span>Cross-Module Suggestions</span>
+              <Sparkles className="w-5 h-5 text-purple-500" />
+              <span>Visual Recommendations</span>
             </h3>
-            
-            {suggestions.length > 0 ? (
+
+            {recommendations.length > 0 ? (
               <div className="space-y-3">
-                {suggestions.map((suggestion, index) => {
-                  const TypeIcon = suggestion.type === 'sync' ? TrendingUp : 
-                                 suggestion.type === 'contrast' ? AlertCircle :
-                                 suggestion.type === 'balance' ? Users : Palette;
-                  
+                {recommendations.map((rec, index) => {
+                  const FocusIcon = focusIcons[rec.focus];
                   return (
                     <motion.div
-                      key={index}
+                      key={`${rec.suggestion}-${index}`}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.1 }}
-                      className={`p-3 rounded-lg border ${typeColors[suggestion.type]}`}
+                      className={`p-3 rounded-lg border ${priorityStyles[rec.priority]}`}
                     >
-                      <div className="flex items-start space-x-3">
-                        <TypeIcon className="w-4 h-4 mt-1 flex-shrink-0" />
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-black/30 flex items-center justify-center">
+                          <FocusIcon className="w-4 h-4 text-amber-300" />
+                        </div>
                         <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="font-medium capitalize">{suggestion.type}</span>
-                            <span className="text-xs px-2 py-1 bg-black/20 rounded-full">
-                              {suggestion.modules.join(' + ')}
-                            </span>
-                            <span className={`text-xs px-2 py-1 bg-black/20 rounded-full ${
-                              suggestion.priority === 'high' ? 'text-red-300' :
-                              suggestion.priority === 'medium' ? 'text-yellow-300' : 'text-gray-300'
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-white">{focusLabels[rec.focus]}</span>
+                            <span className={`text-xs px-2 py-1 rounded-full bg-black/30 ${
+                              rec.priority === 'high' ? 'text-red-300' :
+                              rec.priority === 'medium' ? 'text-amber-300' : 'text-blue-200'
                             }`}>
-                              {suggestion.priority}
+                              {rec.priority} priority
                             </span>
                           </div>
-                          <p className="text-sm mb-1">{suggestion.suggestion}</p>
-                          <p className="text-xs opacity-80">{suggestion.rationale}</p>
+                          <p className="text-sm text-gray-200 mb-1">{rec.suggestion}</p>
+                          <p className="text-xs text-gray-400">{rec.rationale}</p>
                         </div>
                       </div>
                     </motion.div>
@@ -163,38 +177,40 @@ export const CollaborationDashboard: React.FC<CollaborationDashboardProps> = ({ 
                 })}
               </div>
             ) : (
-              <p className="text-gray-400 text-sm">No cross-module suggestions yet. Complete more modules to see collaboration opportunities.</p>
+              <p className="text-gray-400 text-sm">
+                No recommendations yet. Capture insights from storyboard reviews or mood explorations to unlock guidance.
+              </p>
             )}
           </div>
 
-          {/* Module Insights */}
+          {/* Visual Insights */}
           <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
             <h3 className="text-lg font-medium text-white mb-4 flex items-center space-x-2">
               <Palette className="w-5 h-5 text-blue-500" />
-              <span>Module Insights</span>
+              <span>Visual Insights</span>
             </h3>
-            
+
             {insights.length > 0 ? (
               <div className="space-y-4">
-                {['sound', 'casting', 'visual'].map(module => {
-                  const moduleInsights = insights.filter(i => i.module === module);
-                  if (moduleInsights.length === 0) return null;
-                  
-                  const ModuleIcon = moduleIcons[module as keyof typeof moduleIcons];
-                  
+                {( ['composition', 'lighting', 'color', 'camera', 'general'] as VisualFocus[] ).map(focus => {
+                  const focusInsights = groupedInsights[focus];
+                  if (!focusInsights || focusInsights.length === 0) return null;
+
+                  const FocusIcon = focusIcons[focus];
+
                   return (
-                    <div key={module} className="border border-gray-700 rounded-lg p-3">
-                      <h4 className="text-white font-medium mb-2 flex items-center space-x-2">
-                        <ModuleIcon className="w-4 h-4" />
-                        <span className="capitalize">{module} Module</span>
+                    <div key={focus} className="border border-gray-700 rounded-lg p-3">
+                      <h4 className="text-white font-medium mb-2 flex items-center gap-2">
+                        <FocusIcon className="w-4 h-4" />
+                        <span>{focusLabels[focus]}</span>
                       </h4>
                       <div className="space-y-2">
-                        {moduleInsights.map((insight, index) => (
-                          <div key={index} className="text-sm text-gray-300 flex items-start space-x-2">
+                        {focusInsights.map((insight, index) => (
+                          <div key={index} className="text-sm text-gray-300 flex items-start gap-2">
                             <span className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
                               insight.relevance === 'high' ? 'bg-green-400' :
-                              insight.relevance === 'medium' ? 'bg-yellow-400' : 'bg-gray-400'
-                            }`}></span>
+                              insight.relevance === 'medium' ? 'bg-amber-400' : 'bg-gray-500'
+                            }`} />
                             <span>{insight.insight}</span>
                           </div>
                         ))}
@@ -204,7 +220,7 @@ export const CollaborationDashboard: React.FC<CollaborationDashboardProps> = ({ 
                 })}
               </div>
             ) : (
-              <p className="text-gray-400 text-sm">No module insights available yet. Complete more project steps to see collaborative suggestions.</p>
+              <p className="text-gray-400 text-sm">No visual insights recorded yet. Start by logging composition or lighting notes from your latest pass.</p>
             )}
           </div>
         </div>
