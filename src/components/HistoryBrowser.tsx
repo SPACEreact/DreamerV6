@@ -11,7 +11,6 @@ import {
   Filter,
   Star,
   Heart,
-  Image as ImageIcon,
   Music,
   Users,
   Download,
@@ -19,17 +18,18 @@ import {
   X,
   ChevronDown,
   Calendar,
-  Tag
+  Tag,
+  Film
 } from 'lucide-react';
 import { historyService, GenerationHistoryItem, HistoryFilter } from '../services/historyService';
 import { StarRating } from './StarRating';
-import { exportImage, exportAudio, exportCastingReport } from '../utils/exportUtils';
+import { exportAudio, exportCastingReport } from '../utils/exportUtils';
 import { toast } from 'sonner';
 
 interface HistoryBrowserProps {
   onClose: () => void;
   onSelectItem?: (item: GenerationHistoryItem) => void;
-  filterType?: 'image' | 'audio' | 'casting';
+  filterType?: 'audio' | 'casting' | 'video';
 }
 
 export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
@@ -94,14 +94,7 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
       const timestamp = new Date(item.timestamp).toISOString().split('T')[0];
       const baseName = `dreamer-${item.type}-${timestamp}`;
 
-      if (item.type === 'image') {
-        if (item.resultA?.url) {
-          await exportImage(item.resultA.url, `${baseName}-provider-a.png`);
-        }
-        if (item.resultB?.url) {
-          await exportImage(item.resultB.url, `${baseName}-provider-b.png`);
-        }
-      } else if (item.type === 'audio') {
+      if (item.type === 'audio') {
         if (item.resultA?.url) {
           await exportAudio(item.resultA.url, `${baseName}-provider-a.mp3`);
         }
@@ -119,6 +112,20 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
           }
         };
         exportCastingReport(castingData, 'txt');
+      } else if (item.type === 'video') {
+        const promptCandidate = (item.resultA?.data?.prompt
+          || item.resultB?.data?.prompt
+          || (typeof item.resultA?.data === 'string' ? item.resultA?.data : undefined)
+          || (typeof item.resultB?.data === 'string' ? item.resultB?.data : undefined)
+          || item.prompt);
+
+        if (promptCandidate) {
+          await navigator.clipboard.writeText(promptCandidate);
+          toast.success('Video prompt copied to clipboard');
+        } else {
+          toast.error('No video prompt available to export');
+        }
+        return;
       }
 
       toast.success('Export completed');
@@ -130,18 +137,18 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'image': return <ImageIcon className="w-4 h-4" />;
       case 'audio': return <Music className="w-4 h-4" />;
       case 'casting': return <Users className="w-4 h-4" />;
+      case 'video': return <Film className="w-4 h-4" />;
       default: return null;
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'image': return 'text-blue-400 bg-blue-500/20';
       case 'audio': return 'text-purple-400 bg-purple-500/20';
       case 'casting': return 'text-pink-400 bg-pink-500/20';
+      case 'video': return 'text-amber-400 bg-amber-500/20';
       default: return 'text-gray-400 bg-gray-500/20';
     }
   };
@@ -179,9 +186,9 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
           {/* Statistics */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
             <StatCard label="Total" value={stats.total} />
-            <StatCard label="Images" value={stats.byType.image} icon={<ImageIcon className="w-4 h-4" />} />
             <StatCard label="Audio" value={stats.byType.audio} icon={<Music className="w-4 h-4" />} />
             <StatCard label="Casting" value={stats.byType.casting} icon={<Users className="w-4 h-4" />} />
+            <StatCard label="Video Prompts" value={stats.byType.video} icon={<Film className="w-4 h-4" />} />
             <StatCard label="Favorites" value={stats.favorites} icon={<Heart className="w-4 h-4 fill-pink-500 text-pink-500" />} />
           </div>
 
@@ -236,18 +243,6 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
                     {!filterType && (
                       <>
                         <button
-                          onClick={() => setFilter({ ...filter, type: filter.type === 'image' ? undefined : 'image' })}
-                          className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                            filter.type === 'image'
-                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500'
-                              : 'bg-gray-800 text-gray-400 border border-gray-700'
-                          }`}
-                        >
-                          <ImageIcon className="w-4 h-4 inline mr-1" />
-                          Images
-                        </button>
-
-                        <button
                           onClick={() => setFilter({ ...filter, type: filter.type === 'audio' ? undefined : 'audio' })}
                           className={`px-3 py-1 rounded-full text-sm transition-colors ${
                             filter.type === 'audio'
@@ -269,6 +264,18 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
                         >
                           <Users className="w-4 h-4 inline mr-1" />
                           Casting
+                        </button>
+
+                        <button
+                          onClick={() => setFilter({ ...filter, type: filter.type === 'video' ? undefined : 'video' })}
+                          className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                            filter.type === 'video'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500'
+                              : 'bg-gray-800 text-gray-400 border border-gray-700'
+                          }`}
+                        >
+                          <Film className="w-4 h-4 inline mr-1" />
+                          Video
                         </button>
                       </>
                     )}

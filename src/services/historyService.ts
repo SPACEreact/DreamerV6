@@ -5,7 +5,7 @@
 
 export interface GenerationHistoryItem {
   id: string;
-  type: 'image' | 'audio' | 'casting';
+  type: 'audio' | 'casting' | 'video';
   timestamp: Date;
   prompt: string;
   providerA: string;
@@ -34,7 +34,7 @@ export interface GenerationHistoryItem {
 }
 
 export interface HistoryFilter {
-  type?: 'image' | 'audio' | 'casting';
+  type?: 'audio' | 'casting' | 'video';
   minRating?: number;
   favoritesOnly?: boolean;
   searchTerm?: string;
@@ -225,9 +225,9 @@ class HistoryService {
     return {
       total: history.length,
       byType: {
-        image: history.filter(h => h.type === 'image').length,
         audio: history.filter(h => h.type === 'audio').length,
-        casting: history.filter(h => h.type === 'casting').length
+        casting: history.filter(h => h.type === 'casting').length,
+        video: history.filter(h => h.type === 'video').length
       },
       favorites: history.filter(h => h.favorite).length,
       averageRating: history.length > 0
