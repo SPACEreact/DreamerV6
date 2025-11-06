@@ -17,7 +17,12 @@ import {
   CheckCircle,
   ArrowRight
 } from 'lucide-react';
-import { StoryIdeationService, StoryContext, storyIdeationQuestions } from '../services/storyIdeationService';
+import {
+  StoryIdeationService,
+  StoryContext,
+  storyIdeationQuestions,
+  SmartSuggestionResult
+} from '../services/storyIdeationService';
 
 interface StoryIdeationProps {
   onComplete: (context: Partial<StoryContext>, script: string) => void;
@@ -36,7 +41,7 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
     storyIdeationQuestions.map(q => ({ id: q.id, answer: '', completed: false }))
   );
   const [context, setContext] = useState<Partial<StoryContext>>({});
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<SmartSuggestionResult | null>(null);
   const [knowledgeInsights, setKnowledgeInsights] = useState<string[]>([]);
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
   const [detectedGenre, setDetectedGenre] = useState<string | null>(null);
@@ -46,6 +51,9 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
   const progress = ((currentQuestionIndex + 1) / storyIdeationQuestions.length) * 100;
 
   const shouldShowCurrentQuestion = StoryIdeationService.shouldShowQuestion(currentQuestion.id, context);
+
+  const storySummary = useMemo(() => StoryIdeationService.buildScriptFromContext(context), [context]);
+  const ageGroup = useMemo(() => (context.age ? StoryIdeationService.getAgeGroup(context.age) : null), [context.age]);
 
   const answersMap = useMemo(() => {
     return questions.reduce((acc, q) => {
@@ -91,17 +99,30 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
         return acc;
       }, {} as Record<string, string>);
 
-        const smartSuggestions = await StoryIdeationService.generateSmartSuggestions(
-          nextQuestion.id,
-          contextToUse,
-          allAnswers
-        );
-        setSuggestions(smartSuggestions);
-      } else {
-        setSuggestions([]);
+      const currentIndex = storyIdeationQuestions.findIndex(q => q.id === currentQuestion.id);
+      let nextVisibleQuestion: typeof storyIdeationQuestions[number] | undefined;
+
+      for (let idx = currentIndex + 1; idx < storyIdeationQuestions.length; idx += 1) {
+        const candidate = storyIdeationQuestions[idx];
+        if (StoryIdeationService.shouldShowQuestion(candidate.id, contextToUse)) {
+          nextVisibleQuestion = candidate;
+          break;
+        }
       }
+
+      if (!nextVisibleQuestion) {
+        setSuggestions(null);
+        return;
+      }
+
+      const smartSuggestions = await StoryIdeationService.generateSmartSuggestions(
+        nextVisibleQuestion.id,
+        contextToUse,
+        allAnswers
+      );
+      setSuggestions(smartSuggestions);
     } catch (error) {
-      // Suggestion generation failed
+      setSuggestions(null);
     } finally {
       setIsGeneratingSuggestions(false);
     }
@@ -139,15 +160,7 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
       generateSuggestionsForNext(updatedContext, updatedQuestions);
     } else {
       setIsGeneratingSuggestions(false);
-      setSuggestions([]);
-    }
-  };
-
-  const handleSuggestionClick = (suggestion: string) => {
-    if (!currentQuestionState?.answer.trim()) {
-      handleAnswerChange(suggestion);
-    } else {
-      handleAnswerChange(`${currentQuestionState.answer}\n\n${suggestion}`);
+      setSuggestions(null);
     }
   };
 
@@ -287,60 +300,115 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
                   placeholder={currentQuestion.placeholder}
                   className="w-full h-32 p-4 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none resize-none"
                 />
-                
-                {/* Smart Suggestions */}
-                {suggestions.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-300 flex items-center space-x-1">
-                      <Lightbulb className="w-4 h-4 text-amber-400" />
-                      <span>Smart Suggestions</span>
-                    </h4>
-                    <div className="grid gap-2">
-                      {suggestions.map((suggestion, index) => (
-                        <motion.button
-                          key={index}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => handleSuggestionClick(suggestion)}
-                          className="p-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-left transition-colors"
-                        >
-                          <span className="text-amber-400 text-xs mr-2">✨</span>
-                          <span className="text-gray-300 text-sm">{suggestion}</span>
-                        </motion.button>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
-                {/* Knowledge Insights */}
-                {knowledgeInsights.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-300 flex items-center space-x-1">
-                      <BookOpen className="w-4 h-4 text-blue-400" />
-                      <span>Relevant Insights</span>
-                    </h4>
-                    <div className="space-y-1">
-                      {knowledgeInsights.map((insight, index) => (
-                        <div key={index} className="text-blue-300 text-xs p-2 bg-blue-900/10 rounded">
-                          {insight}
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="space-y-4">
+                    {/* Smart Suggestions */}
+                    {(suggestions?.bestSuggestion || isGeneratingSuggestions) && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-sm text-gray-300">
+                          <div className="flex items-center space-x-1">
+                            <Lightbulb className="w-4 h-4 text-amber-400" />
+                            <span>Next Step Guidance</span>
+                          </div>
+                          {isGeneratingSuggestions && <span className="text-xs text-amber-300">Thinking...</span>}
                         </div>
-                      ))}
+                        {suggestions?.bestSuggestion && !isGeneratingSuggestions && (
+                          <div className="p-4 bg-gray-800/60 border border-gray-700 rounded-lg space-y-3">
+                            <div className="text-xs uppercase tracking-wide text-amber-400">
+                              Upcoming: {suggestions.targetQuestionTitle}
+                            </div>
+                            <p className="text-gray-100 text-sm leading-relaxed">
+                              {suggestions.bestSuggestion.text}
+                            </p>
+                            <p className="text-xs text-amber-200/80 bg-amber-500/10 border border-amber-500/20 rounded-md p-2">
+                              {suggestions.bestSuggestion.reason}
+                            </p>
+                            {suggestions.additionalSuggestions.length > 0 && (
+                              <details className="text-xs text-gray-400">
+                                <summary className="cursor-pointer text-amber-300">See other ideas</summary>
+                                <ul className="list-disc list-inside space-y-1 mt-2 text-gray-300">
+                                  {suggestions.additionalSuggestions.map((item, idx) => (
+                                    <li key={idx}>{item}</li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Knowledge Insights */}
+                    {knowledgeInsights.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-gray-300 flex items-center space-x-1">
+                          <BookOpen className="w-4 h-4 text-blue-400" />
+                          <span>Relevant Insights</span>
+                        </h4>
+                        <div className="space-y-1">
+                          {knowledgeInsights.map((insight, index) => (
+                            <div key={index} className="text-blue-300 text-xs p-2 bg-blue-900/10 rounded">
+                              {insight}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Age Context Enhancement */}
+                    {currentQuestion.id === 'protagonist' && currentQuestionState?.answer && context.age && (
+                      <div className="p-3 bg-green-900/20 border border-green-700/30 rounded-lg">
+                        <h4 className="text-green-400 text-sm font-medium mb-1">💡 Life Stage Insights</h4>
+                        <p className="text-green-300 text-xs">
+                          {StoryIdeationService.ageContextMap[StoryIdeationService.getAgeGroup(context.age)]}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Story Summary Panel */}
+                  <div className="space-y-3">
+                    <div className="p-4 bg-gray-900/60 border border-gray-800 rounded-lg h-full flex flex-col">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-white flex items-center space-x-2">
+                          <Sparkles className="w-4 h-4 text-amber-400" />
+                          <span>Story Summary</span>
+                        </h4>
+                      </div>
+                      <div className="flex-1 overflow-auto">
+                        {storySummary ? (
+                          <pre className="whitespace-pre-wrap text-xs text-gray-300 leading-relaxed">
+                            {storySummary}
+                          </pre>
+                        ) : (
+                          <p className="text-xs text-gray-500">
+                            Answer more questions to see a live summary of your story beats.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        {detectedGenre && (
+                          <div className="p-3 bg-purple-900/20 border border-purple-700/40 rounded-lg">
+                            <div className="text-xs text-purple-200 font-semibold">Detected Genre: {detectedGenre}</div>
+                            <p className="text-[11px] text-purple-200/80 mt-1">
+                              Focus on {StoryIdeationService.getGenreEmotionalFocus(detectedGenre)}.
+                            </p>
+                          </div>
+                        )}
+                        {context.age && ageGroup && (
+                          <div className="p-3 bg-emerald-900/20 border border-emerald-700/40 rounded-lg">
+                            <div className="text-xs text-emerald-200 font-semibold">Protagonist Age Insight</div>
+                            <p className="text-[11px] text-emerald-200/80 mt-1">
+                              {StoryIdeationService.ageContextMap[ageGroup]}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                )}
-
-                {/* Age Context Enhancement */}
-                {currentQuestion.id === 'protagonist' && currentQuestionState?.answer && context.age && (
-                  <div className="p-3 bg-green-900/20 border border-green-700/30 rounded-lg">
-                    <h4 className="text-green-400 text-sm font-medium mb-1">💡 Life Stage Insights</h4>
-                    <p className="text-green-300 text-xs">
-                      {StoryIdeationService.ageContextMap[StoryIdeationService.getAgeGroup(context.age)]}
-                    </p>
-                  </div>
-                )}
+                </div>
               </div>
             </motion.div>
           </AnimatePresence>
