@@ -12,8 +12,6 @@ import {
   Star,
   Heart,
   Image as ImageIcon,
-  Music,
-  Users,
   Download,
   Trash2,
   X,
@@ -23,26 +21,22 @@ import {
 } from 'lucide-react';
 import { historyService, GenerationHistoryItem, HistoryFilter } from '../services/historyService';
 import { StarRating } from './StarRating';
-import { exportImage, exportAudio, exportCastingReport } from '../utils/exportUtils';
+import { exportImage } from '../utils/exportUtils';
 import { toast } from 'sonner';
 
 interface HistoryBrowserProps {
   onClose: () => void;
   onSelectItem?: (item: GenerationHistoryItem) => void;
-  filterType?: 'image' | 'audio' | 'casting';
 }
 
 export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
   onClose,
-  onSelectItem,
-  filterType
+  onSelectItem
 }) => {
   const [history, setHistory] = useState<GenerationHistoryItem[]>([]);
   const [filteredHistory, setFilteredHistory] = useState<GenerationHistoryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filter, setFilter] = useState<HistoryFilter>({
-    type: filterType
-  });
+  const [filter, setFilter] = useState<HistoryFilter>({});
   const [showFilters, setShowFilters] = useState(false);
   const [selectedItem, setSelectedItem] = useState<GenerationHistoryItem | null>(null);
   const [stats, setStats] = useState(historyService.getStatistics());
@@ -101,48 +95,12 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
         if (item.resultB?.url) {
           await exportImage(item.resultB.url, `${baseName}-provider-b.png`);
         }
-      } else if (item.type === 'audio') {
-        if (item.resultA?.url) {
-          await exportAudio(item.resultA.url, `${baseName}-provider-a.mp3`);
-        }
-        if (item.resultB?.url) {
-          await exportAudio(item.resultB.url, `${baseName}-provider-b.mp3`);
-        }
-      } else if (item.type === 'casting') {
-        const castingData = {
-          prompt: item.prompt,
-          characters: item.resultA?.data || item.resultB?.data,
-          providerComparison: {
-            providerA: item.providerA,
-            providerB: item.providerB,
-            similarity: item.crossValidation?.similarity
-          }
-        };
-        exportCastingReport(castingData, 'txt');
       }
 
       toast.success('Export completed');
     } catch (error) {
       // Export failed
       toast.error('Export failed');
-    }
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'image': return <ImageIcon className="w-4 h-4" />;
-      case 'audio': return <Music className="w-4 h-4" />;
-      case 'casting': return <Users className="w-4 h-4" />;
-      default: return null;
-    }
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'image': return 'text-blue-400 bg-blue-500/20';
-      case 'audio': return 'text-purple-400 bg-purple-500/20';
-      case 'casting': return 'text-pink-400 bg-pink-500/20';
-      default: return 'text-gray-400 bg-gray-500/20';
     }
   };
 
@@ -177,12 +135,11 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
           </div>
 
           {/* Statistics */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <StatCard label="Total" value={stats.total} />
-            <StatCard label="Images" value={stats.byType.image} icon={<ImageIcon className="w-4 h-4" />} />
-            <StatCard label="Audio" value={stats.byType.audio} icon={<Music className="w-4 h-4" />} />
-            <StatCard label="Casting" value={stats.byType.casting} icon={<Users className="w-4 h-4" />} />
+            <StatCard label="Visual Frames" value={stats.byType.image} icon={<ImageIcon className="w-4 h-4" />} />
             <StatCard label="Favorites" value={stats.favorites} icon={<Heart className="w-4 h-4 fill-pink-500 text-pink-500" />} />
+            <StatCard label="Rated" value={stats.ratedItems} icon={<Star className="w-4 h-4 text-yellow-400" />} />
           </div>
 
           {/* Search and Filters */}
@@ -232,46 +189,6 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
                       <Heart className="w-4 h-4 inline mr-1" />
                       Favorites Only
                     </button>
-
-                    {!filterType && (
-                      <>
-                        <button
-                          onClick={() => setFilter({ ...filter, type: filter.type === 'image' ? undefined : 'image' })}
-                          className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                            filter.type === 'image'
-                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500'
-                              : 'bg-gray-800 text-gray-400 border border-gray-700'
-                          }`}
-                        >
-                          <ImageIcon className="w-4 h-4 inline mr-1" />
-                          Images
-                        </button>
-
-                        <button
-                          onClick={() => setFilter({ ...filter, type: filter.type === 'audio' ? undefined : 'audio' })}
-                          className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                            filter.type === 'audio'
-                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500'
-                              : 'bg-gray-800 text-gray-400 border border-gray-700'
-                          }`}
-                        >
-                          <Music className="w-4 h-4 inline mr-1" />
-                          Audio
-                        </button>
-
-                        <button
-                          onClick={() => setFilter({ ...filter, type: filter.type === 'casting' ? undefined : 'casting' })}
-                          className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                            filter.type === 'casting'
-                              ? 'bg-pink-500/20 text-pink-300 border border-pink-500'
-                              : 'bg-gray-800 text-gray-400 border border-gray-700'
-                          }`}
-                        >
-                          <Users className="w-4 h-4 inline mr-1" />
-                          Casting
-                        </button>
-                      </>
-                    )}
                   </div>
 
                   <div className="flex gap-3 items-center">
@@ -317,8 +234,6 @@ export const HistoryBrowser: React.FC<HistoryBrowserProps> = ({
                   onDelete={() => handleDelete(item.id)}
                   onExport={() => handleExport(item)}
                   onClick={() => onSelectItem?.(item)}
-                  getTypeIcon={getTypeIcon}
-                  getTypeColor={getTypeColor}
                 />
               ))}
             </div>
@@ -346,9 +261,7 @@ const HistoryItem: React.FC<{
   onDelete: () => void;
   onExport: () => void;
   onClick: () => void;
-  getTypeIcon: (type: string) => React.ReactNode;
-  getTypeColor: (type: string) => string;
-}> = ({ item, onRate, onToggleFavorite, onDelete, onExport, onClick, getTypeIcon, getTypeColor }) => (
+}> = ({ item, onRate, onToggleFavorite, onDelete, onExport, onClick }) => (
   <motion.div
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
@@ -357,9 +270,9 @@ const HistoryItem: React.FC<{
     <div className="flex items-start justify-between gap-4">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-2">
-          <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${getTypeColor(item.type)}`}>
-            {getTypeIcon(item.type)}
-            <span className="capitalize">{item.type}</span>
+          <div className="flex items-center gap-1 px-2 py-1 rounded text-xs text-blue-300 bg-blue-500/20">
+            <ImageIcon className="w-4 h-4" />
+            <span className="capitalize">{item.type === 'image' ? 'Image' : item.type}</span>
           </div>
           <span className="text-xs text-gray-500">
             {new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString()}

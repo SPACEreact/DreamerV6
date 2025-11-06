@@ -79,7 +79,9 @@ class SupabaseHistoryService {
         return [];
       }
 
-      return (data || []).map(this.mapToHistoryItem);
+      return (data || [])
+        .map(row => this.mapToHistoryItem(row))
+        .filter((item): item is GenerationHistoryItem => item !== null);
     } catch (error) {
       return [];
     }
@@ -128,7 +130,9 @@ class SupabaseHistoryService {
         return [];
       }
 
-      let items = (data || []).map(this.mapToHistoryItem);
+      let items = (data || [])
+        .map(row => this.mapToHistoryItem(row))
+        .filter((item): item is GenerationHistoryItem => item !== null);
 
       // Tag filtering (not supported by PostgreSQL query directly)
       if (filter.tags && filter.tags.length > 0) {
@@ -159,7 +163,8 @@ class SupabaseHistoryService {
         return null;
       }
 
-      return this.mapToHistoryItem(data);
+      const item = this.mapToHistoryItem(data);
+      return item ?? null;
     } catch (error) {
       return null;
     }
@@ -344,9 +349,7 @@ class SupabaseHistoryService {
       return {
         total: history.length,
         byType: {
-          image: history.filter(h => h.type === 'image').length,
-          audio: history.filter(h => h.type === 'audio').length,
-          casting: history.filter(h => h.type === 'casting').length
+          image: history.length
         },
         favorites: history.filter(h => h.favorite).length,
         averageRating: history.length > 0
@@ -357,7 +360,7 @@ class SupabaseHistoryService {
     } catch (error) {
       return {
         total: 0,
-        byType: { image: 0, audio: 0, casting: 0 },
+        byType: { image: 0 },
         favorites: 0,
         averageRating: 0,
         ratedItems: 0
@@ -368,10 +371,14 @@ class SupabaseHistoryService {
   /**
    * Map database row to GenerationHistoryItem
    */
-  private mapToHistoryItem(row: GenerationHistoryRow): GenerationHistoryItem {
+  private mapToHistoryItem(row: GenerationHistoryRow): GenerationHistoryItem | null {
+    if (row.type && row.type !== 'image') {
+      return null;
+    }
+
     return {
       id: row.id,
-      type: row.type,
+      type: 'image',
       timestamp: new Date(row.created_at),
       prompt: row.prompt,
       providerA: row.provider_a,
@@ -413,9 +420,12 @@ class SupabaseHistoryService {
 
       let migrated = 0;
       for (const item of localHistory) {
+        if (item.type && item.type !== 'image') {
+          continue;
+        }
         try {
           await this.addToHistory({
-            type: item.type,
+            type: 'image',
             prompt: item.prompt,
             providerA: item.providerA,
             providerB: item.providerB,

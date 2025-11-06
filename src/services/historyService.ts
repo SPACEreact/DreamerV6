@@ -5,7 +5,7 @@
 
 export interface GenerationHistoryItem {
   id: string;
-  type: 'image' | 'audio' | 'casting';
+  type: 'image';
   timestamp: Date;
   prompt: string;
   providerA: string;
@@ -34,7 +34,7 @@ export interface GenerationHistoryItem {
 }
 
 export interface HistoryFilter {
-  type?: 'image' | 'audio' | 'casting';
+  type?: 'image';
   minRating?: number;
   favoritesOnly?: boolean;
   searchTerm?: string;
@@ -78,11 +78,13 @@ class HistoryService {
       if (!data) return [];
 
       const parsed = JSON.parse(data);
-      // Convert timestamp strings back to Date objects
-      return parsed.map((item: any) => ({
-        ...item,
-        timestamp: new Date(item.timestamp)
-      }));
+      // Convert timestamp strings back to Date objects and drop legacy non-visual entries
+      return parsed
+        .map((item: any) => ({
+          ...item,
+          timestamp: new Date(item.timestamp)
+        }))
+        .filter((item: GenerationHistoryItem) => item.type === 'image');
     } catch (error) {
       // Failed to load history
       return [];
@@ -222,12 +224,11 @@ class HistoryService {
    */
   getStatistics() {
     const history = this.getHistory();
+    const imageCount = history.length;
     return {
       total: history.length,
       byType: {
-        image: history.filter(h => h.type === 'image').length,
-        audio: history.filter(h => h.type === 'audio').length,
-        casting: history.filter(h => h.type === 'casting').length
+        image: imageCount
       },
       favorites: history.filter(h => h.favorite).length,
       averageRating: history.length > 0
@@ -252,10 +253,12 @@ class HistoryService {
       const parsed = JSON.parse(jsonData);
       if (!Array.isArray(parsed)) return false;
       
-      const history = parsed.map((item: any) => ({
-        ...item,
-        timestamp: new Date(item.timestamp)
-      }));
+      const history = parsed
+        .map((item: any) => ({
+          ...item,
+          timestamp: new Date(item.timestamp)
+        }))
+        .filter((item: GenerationHistoryItem) => item.type === 'image');
       
       this.saveHistory(history);
       return true;
