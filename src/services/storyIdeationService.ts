@@ -104,6 +104,12 @@ export const storyIdeationQuestions: StoryIdeationQuestion[] = [
   }
 ];
 
+export interface SmartSuggestion {
+  recommendation: string;
+  rationale: string;
+  source: 'analysis' | 'knowledge';
+}
+
 export class StoryIdeationService {
   static ageContextMap: Record<string, string> = {
     'child': 'Innocence, wonder, vulnerability to adult world, formation of identity',
@@ -216,30 +222,121 @@ export class StoryIdeationService {
     }
   }
 
-  static async generateSmartSuggestions(questionId: string, context: Partial<StoryContext>, allAnswers: Record<string, string>): Promise<string[]> {
+  static async generateSmartSuggestions(
+    questionId: string,
+    context: Partial<StoryContext>,
+    allAnswers: Record<string, string>
+  ): Promise<SmartSuggestion | null> {
     try {
-      // Build context from all answered questions
-      const contextText = Object.entries(allAnswers)
-        .filter(([key, value]) => value.trim().length > 0)
+      const answeredEntries = Object.entries(allAnswers)
+        .filter(([, value]) => value.trim().length > 0);
+
+      const contextText = answeredEntries
         .map(([key, value]) => `${key}: ${value}`)
         .join('\n');
 
-      const knowledgeContext = this.getRelevantKnowledge(questionId)
-        .join('\n');
+      const knowledgeEntries = this.getRelevantKnowledge(questionId);
+      const knowledgeContext = knowledgeEntries.join('\n');
 
-      const fullContext = `${knowledgeContext}\n\nStory Context:\n${contextText}`;
+      const fullContext = `${knowledgeContext}\n\nStory Context:\n${contextText}`.trim();
 
-      // Use HuggingFace for local analysis if available
-      const suggestions = await huggingFaceService.generateSuggestions(fullContext, questionId);
-      
-      if (suggestions && suggestions.length > 0) {
-        return suggestions.slice(0, 3); // Return top 3 suggestions
+      const analysisSuggestions = await huggingFaceService.generateSuggestions(fullContext, questionId);
+
+      const candidates: Array<{
+        text: string;
+        source: 'analysis' | 'knowledge';
+        reference?: string;
+        weight: number;
+      }> = [];
+
+      analysisSuggestions
+        .filter(Boolean)
+        .forEach((text, index) => {
+          candidates.push({
+            text,
+            source: 'analysis',
+            weight: 3 - index
+          });
+        });
+
+      knowledgeEntries.forEach(entry => {
+        const clean = entry.replace(/^📚\s*/, '');
+        const [referencePart, detailPart] = clean.split(':');
+        const detail = (detailPart || referencePart).trim();
+        const reference = detailPart ? referencePart.trim() : undefined;
+
+        candidates.push({
+          text: detail,
+          source: 'knowledge',
+          reference,
+          weight: 1.5
+        });
+      });
+
+      if (candidates.length === 0) {
+        return null;
       }
 
-      // Fallback to knowledge-based suggestions
-      return this.getRelevantKnowledge(questionId).slice(0, 2);
+      const emphasisKeywords = new Set(
+        answeredEntries
+          .slice(-2)
+          .flatMap(([, value]) => value.toLowerCase().split(/[^a-z0-9]+/))
+          .filter(word => word.length > 4)
+      );
+
+      const scored = candidates.map(candidate => {
+        const matches = candidate.text
+          .toLowerCase()
+          .split(/[^a-z0-9]+/)
+          .filter(token => emphasisKeywords.has(token)).length;
+
+        return {
+          ...candidate,
+          score: candidate.weight + matches * 0.75,
+          matchedKeyword: [...emphasisKeywords].find(keyword => candidate.text.toLowerCase().includes(keyword))
+        };
+      });
+
+      const best = scored.sort((a, b) => b.score - a.score)[0];
+
+      const rationaleParts: string[] = [];
+
+      if (best.source === 'analysis') {
+        rationaleParts.push('Derived from Dreamer\'s narrative analysis of your answers');
+      } else if (best.reference) {
+        rationaleParts.push(`Inspired by ${best.reference} from the knowledge base`);
+      } else {
+        rationaleParts.push('Sourced from Dreamer\'s knowledge base');
+      }
+
+      if (best.matchedKeyword) {
+        rationaleParts.push(`Connects with your focus on "${best.matchedKeyword}"`);
+      }
+
+      const fallbackFocus = answeredEntries.length > 0
+        ? answeredEntries[answeredEntries.length - 1][0]
+        : context.genre ? 'genre' : 'story';
+
+      const rationale = rationaleParts.length > 0
+        ? rationaleParts.join('. ') + '.'
+        : `Provides a strong next step for refining the ${fallbackFocus}.`;
+
+      return {
+        recommendation: best.text,
+        rationale,
+        source: best.source
+      };
     } catch (error) {
-      return this.getRelevantKnowledge(questionId).slice(0, 2);
+      const fallback = this.getRelevantKnowledge(questionId)[0];
+      if (!fallback) {
+        return null;
+      }
+
+      return {
+        recommendation: fallback.replace(/^📚\s*/, ''),
+        rationale: 'Fallback recommendation supplied from Dreamer\'s knowledge base.',
+        source: 'knowledge'
+      };
     }
   }
 

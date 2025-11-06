@@ -30,3 +30,23 @@ describe('StoryIdeationService.getRelevantKnowledge', () => {
     }
   });
 });
+
+describe('StoryIdeationService.generateSmartSuggestions', () => {
+  it('returns a structured suggestion object', async () => {
+    const suggestion = await StoryIdeationService.generateSmartSuggestions(
+      'coreWant',
+      {
+        protagonist: 'Alex, a burned-out paramedic',
+        coreWant: 'to rediscover a sense of purpose'
+      },
+      {
+        protagonist: 'Alex, a burned-out paramedic',
+        coreWant: 'to rediscover a sense of purpose'
+      }
+    );
+
+    expect(suggestion).toBeTruthy();
+    expect(suggestion?.recommendation).toBeTypeOf('string');
+    expect(suggestion?.rationale).toBeTypeOf('string');
+  });
+});

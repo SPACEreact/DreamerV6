@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Lightbulb,
@@ -12,12 +12,20 @@ import {
   MapPin,
   Clock,
   Target,
-  AlertTriangle,
   Film,
   CheckCircle,
-  ArrowRight
+  ArrowRight,
+  Copy,
+  Check,
+  Loader2
 } from 'lucide-react';
-import { StoryIdeationService, StoryContext, storyIdeationQuestions } from '../services/storyIdeationService';
+import {
+  StoryIdeationService,
+  StoryContext,
+  storyIdeationQuestions,
+  StoryIdeationQuestion,
+  SmartSuggestion
+} from '../services/storyIdeationService';
 
 interface StoryIdeationProps {
   onComplete: (context: Partial<StoryContext>, script: string) => void;
@@ -30,16 +38,43 @@ interface QuestionState {
   completed: boolean;
 }
 
+const findNextVisibleQuestion = (
+  currentIndex: number,
+  context: Partial<StoryContext>
+): StoryIdeationQuestion | null => {
+  for (let i = currentIndex + 1; i < storyIdeationQuestions.length; i++) {
+    const candidate = storyIdeationQuestions[i];
+    if (StoryIdeationService.shouldShowQuestion(candidate.id, context)) {
+      return candidate;
+    }
+  }
+  return null;
+};
+
+const copyToClipboard = async (value: string, onSuccess: () => void) => {
+  try {
+    await navigator.clipboard.writeText(value);
+    onSuccess();
+  } catch (error) {
+    // Clipboard unsupported or blocked; ignore silently
+  }
+};
+
 export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClose }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [questions, setQuestions] = useState<QuestionState[]>(
     storyIdeationQuestions.map(q => ({ id: q.id, answer: '', completed: false }))
   );
   const [context, setContext] = useState<Partial<StoryContext>>({});
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [smartSuggestion, setSmartSuggestion] = useState<SmartSuggestion | null>(null);
+  const [upcomingQuestion, setUpcomingQuestion] = useState<StoryIdeationQuestion | null>(
+    storyIdeationQuestions.length > 1 ? storyIdeationQuestions[1] : null
+  );
   const [knowledgeInsights, setKnowledgeInsights] = useState<string[]>([]);
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
   const [detectedGenre, setDetectedGenre] = useState<string | null>(null);
+  const [copiedSuggestion, setCopiedSuggestion] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
 
   const currentQuestion = storyIdeationQuestions[currentQuestionIndex];
   const currentQuestionState = questions.find(q => q.id === currentQuestion.id);
@@ -47,19 +82,16 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
 
   const shouldShowCurrentQuestion = StoryIdeationService.shouldShowQuestion(currentQuestion.id, context);
 
-  const answersMap = useMemo(() => {
-    return questions.reduce((acc, q) => {
-      acc[q.id] = q.answer;
-      return acc;
-    }, {} as Record<string, string>);
-  }, [questions]);
+  const storySummary = useMemo(
+    () => StoryIdeationService.buildScriptFromContext(context),
+    [context]
+  );
 
   useEffect(() => {
     setKnowledgeInsights(StoryIdeationService.getRelevantKnowledge(currentQuestion.id));
   }, [currentQuestion.id]);
 
   useEffect(() => {
-    // Analyze story for genre when we have enough context
     if (context.protagonist && context.coreWant && context.centralConflict) {
       analyzeGenre();
     }
@@ -73,39 +105,47 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
         setContext(prev => ({ ...prev, genre }));
       }
     } catch (error) {
-      // Genre analysis failed
+      // Silent failure is acceptable for offline heuristics
     }
   };
 
-  const generateSuggestionsForNext = async (
+  const refreshSuggestion = useCallback(async (
     contextOverride?: Partial<StoryContext>,
     questionsOverride?: QuestionState[]
   ) => {
-    setIsGeneratingSuggestions(true);
-    try {
-      const questionsToUse = questionsOverride ?? questions;
-      const contextToUse = contextOverride ?? context;
+    const questionsToUse = questionsOverride ?? questions;
+    const contextToUse = contextOverride ?? context;
 
+    const nextVisible = findNextVisibleQuestion(currentQuestionIndex, contextToUse);
+    setUpcomingQuestion(nextVisible);
+
+    if (!nextVisible) {
+      setSmartSuggestion(null);
+      setIsGeneratingSuggestions(false);
+      return;
+    }
+
+    setIsGeneratingSuggestions(true);
+
+    try {
       const allAnswers = questionsToUse.reduce((acc, q) => {
         acc[q.id] = q.answer;
         return acc;
       }, {} as Record<string, string>);
 
-        const smartSuggestions = await StoryIdeationService.generateSmartSuggestions(
-          nextQuestion.id,
-          contextToUse,
-          allAnswers
-        );
-        setSuggestions(smartSuggestions);
-      } else {
-        setSuggestions([]);
-      }
+      const suggestion = await StoryIdeationService.generateSmartSuggestions(
+        nextVisible.id,
+        contextToUse,
+        allAnswers
+      );
+
+      setSmartSuggestion(suggestion);
     } catch (error) {
-      // Suggestion generation failed
+      setSmartSuggestion(null);
     } finally {
       setIsGeneratingSuggestions(false);
     }
-  };
+  }, [context, questions, currentQuestionIndex]);
 
   const handleAnswerChange = (answer: string) => {
     const trimmedAnswer = answer.trim();
@@ -136,47 +176,54 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
     setContext(updatedContext);
 
     if (shouldShowCurrentQuestion && trimmedAnswer.length > 0) {
-      generateSuggestionsForNext(updatedContext, updatedQuestions);
+      refreshSuggestion(updatedContext, updatedQuestions);
     } else {
       setIsGeneratingSuggestions(false);
-      setSuggestions([]);
+      setSmartSuggestion(null);
+      setUpcomingQuestion(findNextVisibleQuestion(currentQuestionIndex, updatedContext));
     }
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
+  const handleSuggestionApply = (suggestion: SmartSuggestion) => {
+    if (!suggestion) return;
     if (!currentQuestionState?.answer.trim()) {
-      handleAnswerChange(suggestion);
+      handleAnswerChange(suggestion.recommendation);
     } else {
-      handleAnswerChange(`${currentQuestionState.answer}\n\n${suggestion}`);
+      handleAnswerChange(`${currentQuestionState.answer}\n\n${suggestion.recommendation}`);
     }
   };
 
   const nextQuestion = () => {
     if (currentQuestionIndex < storyIdeationQuestions.length - 1) {
-      // Skip questions that shouldn't be shown
       let nextIndex = currentQuestionIndex + 1;
-      while (nextIndex < storyIdeationQuestions.length &&
-             !StoryIdeationService.shouldShowQuestion(storyIdeationQuestions[nextIndex].id, context)) {
+      while (
+        nextIndex < storyIdeationQuestions.length &&
+        !StoryIdeationService.shouldShowQuestion(storyIdeationQuestions[nextIndex].id, context)
+      ) {
         nextIndex++;
       }
-      setCurrentQuestionIndex(nextIndex);
+      setCurrentQuestionIndex(Math.min(nextIndex, storyIdeationQuestions.length - 1));
+      setUpcomingQuestion(findNextVisibleQuestion(Math.min(nextIndex, storyIdeationQuestions.length - 1), context));
     }
   };
 
   const prevQuestion = () => {
     if (currentQuestionIndex > 0) {
       let prevIndex = currentQuestionIndex - 1;
-      while (prevIndex >= 0 &&
-             !StoryIdeationService.shouldShowQuestion(storyIdeationQuestions[prevIndex].id, context)) {
+      while (
+        prevIndex >= 0 &&
+        !StoryIdeationService.shouldShowQuestion(storyIdeationQuestions[prevIndex].id, context)
+      ) {
         prevIndex--;
       }
-      setCurrentQuestionIndex(prevIndex >= 0 ? prevIndex : 0);
+      const safeIndex = prevIndex >= 0 ? prevIndex : 0;
+      setCurrentQuestionIndex(safeIndex);
+      setUpcomingQuestion(findNextVisibleQuestion(safeIndex, context));
     }
   };
 
   const canProceed = currentQuestionState?.completed || !currentQuestion.required;
   const isLastQuestion = currentQuestionIndex >= storyIdeationQuestions.length - 1;
-
   const completedQuestions = questions.filter(q => q.completed).length;
 
   const handleComplete = () => {
@@ -198,21 +245,35 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
 
   const QuestionIcon = getQuestionIcon(currentQuestion.category);
 
-  // Only auto-skip if we're past the first question and the current one shouldn't be shown
   if (currentQuestionIndex > 0 && !shouldShowCurrentQuestion) {
     nextQuestion();
     return null;
   }
 
+  const handleCopySuggestion = () => {
+    if (!smartSuggestion) return;
+    copyToClipboard(smartSuggestion.recommendation, () => {
+      setCopiedSuggestion(true);
+      setTimeout(() => setCopiedSuggestion(false), 2000);
+    });
+  };
+
+  const handleCopySummary = () => {
+    if (!storySummary.trim()) return;
+    copyToClipboard(storySummary, () => {
+      setCopiedSummary(true);
+      setTimeout(() => setCopiedSummary(false), 2000);
+    });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-gray-900 border border-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+        className="bg-gray-900 border border-gray-800 rounded-xl max-w-4xl w-full max-h-[92vh] overflow-hidden"
       >
-        {/* Header */}
         <div className="p-6 border-b border-gray-800">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold text-white flex items-center space-x-2">
@@ -226,15 +287,14 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
               ✕
             </button>
           </div>
-          
-          {/* Progress */}
-          <div className="space-y-2">
+
+          <div className="space-y-3">
             <div className="flex justify-between text-sm text-gray-400">
               <span>Question {currentQuestionIndex + 1} of {storyIdeationQuestions.length}</span>
               <span>{Math.round(progress)}% Complete</span>
             </div>
             <div className="w-full bg-gray-800 rounded-full h-2">
-              <motion.div 
+              <motion.div
                 className="bg-gradient-to-r from-amber-500 to-orange-600 h-2 rounded-full"
                 style={{ width: `${progress}%` }}
                 initial={{ width: 0 }}
@@ -242,21 +302,18 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
                 transition={{ duration: 0.3 }}
               />
             </div>
-          </div>
-
-          {/* Genre Detection */}
-          {detectedGenre && (
-            <div className="mt-3 p-2 bg-purple-900/20 border border-purple-700/30 rounded-lg">
-              <div className="flex items-center space-x-2 text-purple-400 text-sm">
-                <Film className="w-4 h-4" />
-                <span>Detected Genre: <span className="font-medium capitalize">{detectedGenre}</span></span>
+            {detectedGenre && (
+              <div className="mt-1 p-2 bg-purple-900/20 border border-purple-700/30 rounded-lg">
+                <div className="flex items-center space-x-2 text-purple-300 text-sm">
+                  <Film className="w-4 h-4" />
+                  <span>Detected Genre: <span className="font-medium capitalize">{detectedGenre}</span></span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Question Content */}
-        <div className="p-6 overflow-y-auto max-h-[60vh]">
+        <div className="p-6 overflow-y-auto grid gap-6 md:grid-cols-[2fr_1.2fr]">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentQuestion.id}
@@ -266,7 +323,6 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
               transition={{ duration: 0.3 }}
               className="space-y-6"
             >
-              {/* Question Header */}
               <div>
                 <div className="flex items-center space-x-2 mb-2">
                   <QuestionIcon className="w-5 h-5 text-amber-400" />
@@ -279,7 +335,6 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
                 <p className="text-gray-300">{currentQuestion.question}</p>
               </div>
 
-              {/* Answer Input */}
               <div className="space-y-4">
                 <textarea
                   value={currentQuestionState?.answer || ''}
@@ -287,35 +342,44 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
                   placeholder={currentQuestion.placeholder}
                   className="w-full h-32 p-4 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none resize-none"
                 />
-                
-                {/* Smart Suggestions */}
-                {suggestions.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-gray-300 flex items-center space-x-1">
-                      <Lightbulb className="w-4 h-4 text-amber-400" />
-                      <span>Smart Suggestions</span>
-                    </h4>
-                    <div className="grid gap-2">
-                      {suggestions.map((suggestion, index) => (
-                        <motion.button
-                          key={index}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => handleSuggestionClick(suggestion)}
-                          className="p-3 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-left transition-colors"
-                        >
-                          <span className="text-amber-400 text-xs mr-2">✨</span>
-                          <span className="text-gray-300 text-sm">{suggestion}</span>
-                        </motion.button>
-                      ))}
+
+                {isGeneratingSuggestions && (
+                  <div className="flex items-center space-x-2 text-sm text-gray-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Analyzing context for the next best step…</span>
+                  </div>
+                )}
+
+                {smartSuggestion && upcomingQuestion && (
+                  <div className="p-4 bg-gray-800 border border-gray-700 rounded-lg space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-amber-400">Next up: {upcomingQuestion.title}</p>
+                        <h4 className="text-white font-semibold mt-1 flex items-center space-x-2">
+                          <Sparkles className="w-4 h-4 text-amber-400" />
+                          <span>{smartSuggestion.recommendation}</span>
+                        </h4>
+                      </div>
+                      <button
+                        onClick={handleCopySuggestion}
+                        className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors"
+                        title="Copy suggestion"
+                      >
+                        {copiedSuggestion ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-300 leading-relaxed">{smartSuggestion.rationale}</p>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleSuggestionApply(smartSuggestion)}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-black font-medium rounded-lg transition-colors"
+                      >
+                        Use Suggestion
+                      </button>
                     </div>
                   </div>
                 )}
 
-                {/* Knowledge Insights */}
                 {knowledgeInsights.length > 0 && (
                   <div className="space-y-2">
                     <h4 className="text-sm font-medium text-gray-300 flex items-center space-x-1">
@@ -332,7 +396,6 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
                   </div>
                 )}
 
-                {/* Age Context Enhancement */}
                 {currentQuestion.id === 'protagonist' && currentQuestionState?.answer && context.age && (
                   <div className="p-3 bg-green-900/20 border border-green-700/30 rounded-lg">
                     <h4 className="text-green-400 text-sm font-medium mb-1">💡 Life Stage Insights</h4>
@@ -344,10 +407,52 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
               </div>
             </motion.div>
           </AnimatePresence>
+
+          <div className="space-y-4">
+            <div className="p-4 bg-gray-800 border border-gray-700 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-semibold text-gray-200 flex items-center space-x-2">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>Story Summary</span>
+                </h4>
+                <button
+                  onClick={handleCopySummary}
+                  disabled={!storySummary.trim()}
+                  className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {copiedSummary ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
+              {storySummary ? (
+                <pre className="text-xs leading-5 text-gray-300 whitespace-pre-wrap bg-gray-900/40 p-3 rounded-lg">
+                  {storySummary}
+                </pre>
+              ) : (
+                <p className="text-xs text-gray-400">
+                  Start answering questions to see a rolling summary of your story beats.
+                </p>
+              )}
+            </div>
+
+            <div className="p-4 bg-gray-800 border border-gray-700 rounded-lg space-y-2">
+              <h4 className="text-sm font-semibold text-gray-200 flex items-center space-x-2">
+                <Clock className="w-4 h-4 text-amber-400" />
+                <span>Progress</span>
+              </h4>
+              <p className="text-xs text-gray-400">
+                {completedQuestions} of {storyIdeationQuestions.length} questions answered
+              </p>
+              <div className="h-2 bg-gray-900/60 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-blue-500"
+                  style={{ width: `${(completedQuestions / storyIdeationQuestions.length) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Footer Navigation */}
-        <div className="p-6 border-t border-gray-800 flex justify-between">
+        <div className="p-6 border-t border-gray-800 flex justify-between items-center">
           <button
             onClick={prevQuestion}
             disabled={currentQuestionIndex === 0}
@@ -358,7 +463,11 @@ export const StoryIdeation: React.FC<StoryIdeationProps> = ({ onComplete, onClos
           </button>
 
           <div className="text-sm text-gray-400">
-            {completedQuestions} of {storyIdeationQuestions.length} completed
+            {upcomingQuestion ? (
+              <span>Next: <strong>{upcomingQuestion.title}</strong></span>
+            ) : (
+              <span>You are on the final question</span>
+            )}
           </div>
 
           {!isLastQuestion ? (
