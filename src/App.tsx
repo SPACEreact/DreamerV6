@@ -31,7 +31,8 @@ import {
   Palette,
   Download,
   ChevronDown,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import {
   questions,
@@ -2209,6 +2210,7 @@ interface SelectedItemPanelProps {
         enhancedPrompt?: string;
         videoPrompt?: string;
         status: 'idle' | 'loading' | 'error';
+        pendingAction?: 'enhancing' | 'image-photoreal' | 'image-stylized' | 'video-prompt';
     };
     // Visual Editor Props
     compositions: Record<string, CompositionData>;
@@ -2241,6 +2243,9 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
     const [copiedModel, setCopiedModel] = useState<string | null>(null);
     const [showCopyMenu, setShowCopyMenu] = useState(false);
     const [copiedPromptType, setCopiedPromptType] = useState<'current' | 'original' | null>(null);
+    const [nonShotCopySuccess, setNonShotCopySuccess] = useState(false);
+    const [copiedEnhancedPrompt, setCopiedEnhancedPrompt] = useState(false);
+    const [copiedVideoPrompt, setCopiedVideoPrompt] = useState(false);
 
     const handleUpdatePromptFromVisuals = async () => {
         setIsUpdatingPrompt(true);
@@ -2266,13 +2271,47 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
 
     if (item.type !== 'shot') {
         return (
-            <div className="flex-grow flex flex-col p-4 bg-gray-950 border border-gray-800 rounded-lg">
-                 <h2 className="text-xl font-semibold text-amber-400 mb-2">
-                    {item.type === 'b-roll' ? 'B-Roll Shot' : item.type === 'transition' ? 'Transition Note' : 'Title Card'}
-                </h2>
-                {item.type === 'b-roll' && <textarea value={item.prompt} onChange={e => updateItem({...item, prompt: e.target.value})} className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"/>}
-                {item.type === 'transition' && <textarea value={item.note} onChange={e => updateItem({...item, note: e.target.value})} className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"/>}
-                {item.type === 'text' && <textarea value={item.title} onChange={e => updateItem({...item, title: e.target.value})} className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"/>}
+            <div className="flex-grow flex flex-col p-4 bg-gray-950 border border-gray-800 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-amber-400">
+                        {item.type === 'b-roll' ? 'B-Roll Shot' : item.type === 'transition' ? 'Transition Note' : 'Title Card'}
+                    </h2>
+                    <button
+                        onClick={handleCopyNonShotPrompt}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-sm rounded-lg transition-colors"
+                    >
+                        {nonShotCopySuccess ? (
+                            <Check className="w-4 h-4 text-emerald-400" />
+                        ) : (
+                            <ClipboardCopy className="w-4 h-4 text-amber-300" />
+                        )}
+                        <span className="hidden sm:inline text-gray-200">Copy</span>
+                    </button>
+                </div>
+                {item.type === 'b-roll' && (
+                    <textarea
+                        value={item.prompt}
+                        onChange={e => updateItem({ ...item, prompt: e.target.value })}
+                        className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"
+                        placeholder="Describe your b-roll prompt..."
+                    />
+                )}
+                {item.type === 'transition' && (
+                    <textarea
+                        value={item.note}
+                        onChange={e => updateItem({ ...item, note: e.target.value })}
+                        className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"
+                        placeholder="Describe the transition cue..."
+                    />
+                )}
+                {item.type === 'text' && (
+                    <textarea
+                        value={item.title}
+                        onChange={e => updateItem({ ...item, title: e.target.value })}
+                        className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"
+                        placeholder="Enter the title card text..."
+                    />
+                )}
             </div>
         );
     }
@@ -2285,6 +2324,26 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
     const setCurrentStyle = (style: 'cinematic' | 'explainer') => {
         setStyles(prev => ({ ...prev, [item.id]: style }));
     };
+
+    const isEnhancing = generatedContent.status === 'loading' && generatedContent.pendingAction === 'enhancing';
+    const isPhotorealGenerating = generatedContent.status === 'loading' && generatedContent.pendingAction === 'image-photoreal';
+    const isStylizedGenerating = generatedContent.status === 'loading' && generatedContent.pendingAction === 'image-stylized';
+    const isVideoPromptGenerating = generatedContent.status === 'loading' && generatedContent.pendingAction === 'video-prompt';
+    const isGenerationBusy = generatedContent.status === 'loading';
+    const loadingMessage = (() => {
+        switch (generatedContent.pendingAction) {
+            case 'enhancing':
+                return 'Enhancing prompt...';
+            case 'image-photoreal':
+                return 'Generating photoreal image...';
+            case 'image-stylized':
+                return 'Generating stylized image...';
+            case 'video-prompt':
+                return 'Generating video prompt...';
+            default:
+                return 'Working...';
+        }
+    })();
 
     // Visual Editor Handlers
     const onCompositionChange = (field: keyof CompositionData, value: any) => updateVisuals(item.id, 'compositions', { ...visualData.composition, [field]: value });
@@ -2314,6 +2373,66 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
         }
     };
 
+    const handleCopyNonShotPrompt = async () => {
+        let text = '';
+        if (item.type === 'b-roll') {
+            text = item.prompt || '';
+        } else if (item.type === 'transition') {
+            text = item.note || '';
+        } else if (item.type === 'text') {
+            text = item.title || '';
+        }
+
+        if (!text.trim()) {
+            toast.error('Nothing to copy yet.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            setNonShotCopySuccess(true);
+            toast.success('Copied to clipboard!');
+            setTimeout(() => setNonShotCopySuccess(false), 2000);
+        } catch (error) {
+            appLogger.error('Failed to copy prompt content:', error);
+            toast.error('Unable to copy. Please try again.');
+        }
+    };
+
+    const handleCopyEnhancedPrompt = async () => {
+        if (!generatedContent.enhancedPrompt) {
+            toast.error('No enhanced prompt available yet.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(generatedContent.enhancedPrompt);
+            setCopiedEnhancedPrompt(true);
+            toast.success('Enhanced prompt copied!');
+            setTimeout(() => setCopiedEnhancedPrompt(false), 2000);
+        } catch (error) {
+            appLogger.error('Failed to copy enhanced prompt:', error);
+            toast.error('Unable to copy enhanced prompt.');
+        }
+    };
+
+    const handleCopyGeneratedVideoPrompt = async () => {
+        if (!generatedContent.videoPrompt) {
+            toast.error('Generate a video prompt first.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(generatedContent.videoPrompt);
+            setCopiedVideoPrompt(true);
+            toast.success('Video prompt copied!');
+            setTimeout(() => setCopiedVideoPrompt(false), 2000);
+        } catch (error) {
+            appLogger.error('Failed to copy video prompt:', error);
+            toast.error('Unable to copy video prompt right now.');
+        }
+    };
+
     const visualData = {
         composition: compositions[item.id] || defaultComposition,
         lighting: lightingData[item.id] || defaultLighting,
@@ -2334,7 +2453,20 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                    {isModified && (
                         <motion.button title="Revert to Original Prompt" whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => onRevert(shotItem)} className="p-2.5 md:p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"><RefreshCcw className="w-4 h-4 md:w-5 md:h-5 text-amber-400"/></motion.button>
                    )}
-                   <motion.button title="Enhance with AI" whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => onEnhance(shotItem)} className="p-2.5 md:p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"><WandSparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-400"/></motion.button>
+                   <motion.button
+                        title="Enhance with AI"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => onEnhance(shotItem)}
+                        disabled={isEnhancing || isGenerationBusy}
+                        className="p-2.5 md:p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                        {isEnhancing ? (
+                            <Loader2 className="w-4 h-4 md:w-5 md:h-5 text-purple-300 animate-spin" />
+                        ) : (
+                            <WandSparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
+                        )}
+                    </motion.button>
                 </div>
             </div>
 
@@ -2428,10 +2560,31 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                         placeholder="Enter your cinematic prompt here..."
                     />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button onClick={() => onGenerateImage(shotItem, 'photoreal')} className="py-3 md:py-3.5 text-sm md:text-base bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 flex items-center justify-center space-x-2 transition-colors font-medium"><ImageIcon className="w-4 h-4 md:w-5 md:h-5"/><span>Generate Photoreal</span></button>
-                        <button onClick={() => onGenerateImage(shotItem, 'stylized')} className="py-3 md:py-3.5 text-sm md:text-base bg-teal-500/20 text-teal-300 rounded-lg hover:bg-teal-500/30 flex items-center justify-center space-x-2 transition-colors font-medium"><Palette className="w-4 h-4 md:w-5 md:h-5"/><span>Generate Stylized</span></button>
+                        <button
+                            onClick={() => onGenerateImage(shotItem, 'photoreal')}
+                            className="py-3 md:py-3.5 text-sm md:text-base bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 flex items-center justify-center space-x-2 transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                            disabled={isGenerationBusy}
+                        >
+                            {isPhotorealGenerating ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <ImageIcon className="w-4 h-4 md:w-5 md:h-5" />}
+                            <span>{isPhotorealGenerating ? 'Generating...' : 'Generate Photoreal'}</span>
+                        </button>
+                        <button
+                            onClick={() => onGenerateImage(shotItem, 'stylized')}
+                            className="py-3 md:py-3.5 text-sm md:text-base bg-teal-500/20 text-teal-300 rounded-lg hover:bg-teal-500/30 flex items-center justify-center space-x-2 transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                            disabled={isGenerationBusy}
+                        >
+                            {isStylizedGenerating ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Palette className="w-4 h-4 md:w-5 md:h-5" />}
+                            <span>{isStylizedGenerating ? 'Generating...' : 'Generate Stylized'}</span>
+                        </button>
                     </div>
-                     <button onClick={() => onGenerateVideoPrompt(shotItem)} className="w-full py-3 md:py-3.5 text-sm md:text-base bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 flex items-center justify-center space-x-2 transition-colors font-medium"><Film className="w-4 h-4 md:w-5 md:h-5"/><span>Generate Video Prompt</span></button>
+                     <button
+                        onClick={() => onGenerateVideoPrompt(shotItem)}
+                        className="w-full py-3 md:py-3.5 text-sm md:text-base bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 flex items-center justify-center space-x-2 transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                        disabled={isGenerationBusy}
+                    >
+                        {isVideoPromptGenerating ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Film className="w-4 h-4 md:w-5 md:h-5" />}
+                        <span>{isVideoPromptGenerating ? 'Generating...' : 'Generate Video Prompt'}</span>
+                    </button>
                 </div>
                  {/* Generated Content Area */}
                  <div className="space-y-4 flex flex-col">
@@ -2462,8 +2615,8 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                     <div className="w-full flex-grow min-h-[250px] md:min-h-[300px] bg-gray-900 border border-gray-700 rounded-lg p-3 md:p-4 flex items-center justify-center relative group">
                         {generatedContent.status === 'loading' && (
                             <div className="flex flex-col items-center space-y-3">
-                                <div className="w-8 h-8 animate-spin rounded-full border-3 border-gray-400 border-t-amber-400" />
-                                <p className="text-sm text-gray-400">Generating image...</p>
+                                <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+                                <p className="text-sm text-gray-400">{loadingMessage}</p>
                             </div>
                         )}
                         {generatedContent.status === 'error' && (
@@ -2498,11 +2651,44 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                                 <p className="text-xs text-gray-600">Click generate button to create</p>
                             </div>
                         )}
-                     </div>
-                     <div className="flex justify-center gap-3">
+                        {generatedContent.videoPrompt && generatedContent.status !== 'loading' && (
+                            <div className="absolute inset-x-3 bottom-3 bg-gray-900/80 border border-purple-700/40 rounded-lg p-3 backdrop-blur-sm">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs uppercase tracking-wider text-purple-300 mb-1">Video Prompt</p>
+                                        <p className="text-xs md:text-sm text-gray-200 whitespace-pre-wrap break-words max-h-40 overflow-y-auto pr-1">
+                                            {generatedContent.videoPrompt}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={handleCopyGeneratedVideoPrompt}
+                                        className="flex items-center justify-center px-2 py-1 bg-purple-900/40 hover:bg-purple-800/60 rounded-md text-xs text-purple-200"
+                                    >
+                                        {copiedVideoPrompt ? <Check className="w-4 h-4 text-emerald-400" /> : <ClipboardCopy className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex justify-center gap-3">
                         {generatedContent.images.photoreal && <button onClick={() => setImageView('photoreal')} className={`px-4 py-2 text-sm rounded-lg transition-colors ${imageView === 'photoreal' ? 'bg-blue-500 text-white font-medium' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Photoreal</button>}
                         {generatedContent.images.stylized && <button onClick={() => setImageView('stylized')} className={`px-4 py-2 text-sm rounded-lg transition-colors ${imageView === 'stylized' ? 'bg-teal-500 text-white font-medium' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Stylized</button>}
                     </div>
+                    {generatedContent.enhancedPrompt && (
+                        <div className="bg-gray-900 border border-amber-500/30 rounded-lg p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-semibold text-amber-300 uppercase tracking-wide">Enhanced Prompt</h4>
+                                <button
+                                    onClick={handleCopyEnhancedPrompt}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-amber-200"
+                                >
+                                    {copiedEnhancedPrompt ? <Check className="w-4 h-4 text-emerald-400" /> : <ClipboardCopy className="w-4 h-4" />}
+                                    <span className="hidden sm:inline">Copy</span>
+                                </button>
+                            </div>
+                            <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{generatedContent.enhancedPrompt}</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -2515,7 +2701,7 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                         disabled={isUpdatingPrompt}
                         className="px-3 py-1 text-sm rounded bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-60 flex items-center space-x-2"
                     >
-                        {isUpdatingPrompt && <div className="w-4 h-4 animate-spin rounded-full border-2 border-amber-300 border-t-amber-500" />}
+                        {isUpdatingPrompt && <Loader2 className="w-4 h-4 animate-spin text-amber-400" />}
                         <span>{isUpdatingPrompt ? 'Updating...' : 'Update Prompt from Visuals'}</span>
                     </button>
                  </div>
@@ -2606,6 +2792,7 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
     const [showVideoPromptModal, setShowVideoPromptModal] = useState<ShotItem | null>(null);
     const [videoPromptInstructions, setVideoPromptInstructions] = useState("");
     const [videoPromptCopied, setVideoPromptCopied] = useState(false);
+    const [isGeneratingVideoPrompt, setIsGeneratingVideoPrompt] = useState(false);
     
     // Auto-scroll functionality for timeline items
     const timelineContainerRef = useRef<HTMLDivElement>(null);
@@ -2697,6 +2884,7 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
         enhancedPrompt?: string;
         videoPrompt?: string;
         status: 'idle' | 'loading' | 'error';
+        pendingAction?: 'enhancing' | 'image-photoreal' | 'image-stylized' | 'video-prompt';
     }>>({});
 
     const activeItem = useMemo(() => timelineItems.find(item => item.id === activeTimelineItemId), [timelineItems, activeTimelineItemId]);
@@ -2839,14 +3027,36 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
 
     const handleEnhance = async (item: ShotItem) => {
         const id = item.id;
-        setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'loading'}}));
+        setGeneratedContent(prev => ({
+            ...prev,
+            [id]: {
+                ...(prev[id] || { images: {} }),
+                status: 'loading',
+                pendingAction: 'enhancing'
+            }
+        }));
         try {
             const context = (timelineItems || []).filter(i => i).map(i => i.type === 'shot' ? `Shot ${(i as ShotItem)?.data?.shotNumber ?? '?'}: ${(i as ShotItem)?.data?.description ?? ''}` : '').join('\n');
             const enhanced = await enhanceShotPrompt(item.data.prompt, context);
             updateShotData(id, { prompt: enhanced });
-            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'idle', enhancedPrompt: enhanced}}));
+            setGeneratedContent(prev => ({
+                ...prev,
+                [id]: {
+                    ...(prev[id] || { images: {} }),
+                    status: 'idle',
+                    pendingAction: undefined,
+                    enhancedPrompt: enhanced
+                }
+            }));
         } catch (e) {
-            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'error'}}));
+            setGeneratedContent(prev => ({
+                ...prev,
+                [id]: {
+                    ...(prev[id] || { images: {} }),
+                    status: 'error',
+                    pendingAction: undefined
+                }
+            }));
         }
     };
 
@@ -2857,7 +3067,14 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
     const handleGenerateImage = async (item: ShotItem, type: 'photoreal' | 'stylized') => {
         const id = item.id;
         const style = styles[id] || 'cinematic';
-        setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'loading'}}));
+        setGeneratedContent(prev => ({
+            ...prev,
+            [id]: {
+                ...(prev[id] || { images: {} }),
+                status: 'loading',
+                pendingAction: type === 'photoreal' ? 'image-photoreal' : 'image-stylized'
+            }
+        }));
         try {
             const promptForGeneration = style === 'explainer' ? item.data.description : item.data.prompt;
             const currentAspectRatio = aspectRatios[id] || '16:9';
@@ -2868,14 +3085,24 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
             } else {
               b64 = await generateNanoImage(promptForGeneration, style);
             }
-
-            setGeneratedContent(prev => ({...prev, [id]: {
-                ...(prev[id] || {images:{}}),
-                status: 'idle',
-                images: {...prev[id]?.images, [type]: b64}
-            }}));
+            setGeneratedContent(prev => ({
+                ...prev,
+                [id]: {
+                    ...(prev[id] || { images: {} }),
+                    status: 'idle',
+                    pendingAction: undefined,
+                    images: { ...prev[id]?.images, [type]: b64 }
+                }
+            }));
         } catch (e) {
-            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'error'}}));
+            setGeneratedContent(prev => ({
+                ...prev,
+                [id]: {
+                    ...(prev[id] || { images: {} }),
+                    status: 'error',
+                    pendingAction: undefined
+                }
+            }));
         }
     };
 
@@ -2883,16 +3110,40 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
         if (!showVideoPromptModal) return;
         const item = showVideoPromptModal;
         const id = item.id;
-        setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'loading'}}));
-        setShowVideoPromptModal(null);
+        setVideoPromptCopied(false);
+        setIsGeneratingVideoPrompt(true);
+        setGeneratedContent(prev => ({
+            ...prev,
+            [id]: {
+                ...(prev[id] || { images: {} }),
+                status: 'loading',
+                pendingAction: 'video-prompt'
+            }
+        }));
         try {
             const image = generatedContent[id]?.images?.photoreal ? { base64: generatedContent[id].images.photoreal!, mimeType: 'image/jpeg' } : undefined;
             const videoPrompt = await generateVideoPrompt(item.data.prompt, image, videoPromptInstructions);
-            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'idle', videoPrompt: videoPrompt}}));
+            setGeneratedContent(prev => ({
+                ...prev,
+                [id]: {
+                    ...(prev[id] || { images: {} }),
+                    status: 'idle',
+                    pendingAction: undefined,
+                    videoPrompt: videoPrompt
+                }
+            }));
             setVideoPromptInstructions("");
         } catch (e) {
-            setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || {images:{}}), status: 'error'}}));
+            setGeneratedContent(prev => ({
+                ...prev,
+                [id]: {
+                    ...(prev[id] || { images: {} }),
+                    status: 'error',
+                    pendingAction: undefined
+                }
+            }));
         }
+        setIsGeneratingVideoPrompt(false);
     };
 
     const handleVideoPromptCopy = async () => {
@@ -2906,6 +3157,16 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
         } catch (error) {
             appLogger.error("Failed to copy video prompt:", error);
         }
+    };
+
+    const handleCloseVideoPromptModal = () => {
+        if (isGeneratingVideoPrompt) {
+            toast.warning('Please wait for the video prompt to finish generating.');
+            return;
+        }
+        setShowVideoPromptModal(null);
+        setVideoPromptInstructions("");
+        setVideoPromptCopied(false);
     };
 
     const handleDeleteItem = (id: string) => {
@@ -2973,8 +3234,13 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
                                 onEnhance={handleEnhance}
                                 onRevert={handleRevert}
                                 onGenerateImage={handleGenerateImage}
-                                onGenerateVideoPrompt={(item) => { setVideoPromptInstructions(''); setShowVideoPromptModal(item); }}
-                                generatedContent={generatedContent[activeItem.id] || { images: {}, status: 'idle' }}
+                                onGenerateVideoPrompt={(item) => {
+                                    setVideoPromptInstructions('');
+                                    setVideoPromptCopied(false);
+                                    setIsGeneratingVideoPrompt(false);
+                                    setShowVideoPromptModal(item);
+                                }}
+                                generatedContent={generatedContent[activeItem.id] || { images: {}, status: 'idle', pendingAction: undefined }}
                                 compositions={compositions}
                                 lightingData={lightingData}
                                 colorGradingData={colorGradingData}
@@ -3173,13 +3439,32 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
                 </div>
             </div>
              {showVideoPromptModal && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50" onClick={() => setShowVideoPromptModal(null)}>
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
+                    onClick={handleCloseVideoPromptModal}
+                >
                     <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="bg-gray-900 border border-gray-800 rounded-lg p-6 max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-xl font-semibold mb-4">Generate Video Prompt for Shot {showVideoPromptModal.data.shotNumber}</h3>
                         <textarea value={videoPromptInstructions} onChange={(e) => setVideoPromptInstructions(e.target.value)} placeholder="Optional: describe desired camera movement or action..." className="w-full h-24 p-3 bg-gray-800 border border-gray-700 rounded-lg text-white mb-4" />
                         <div className="flex space-x-2">
-                             <motion.button onClick={() => setShowVideoPromptModal(null)} className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg">Cancel</motion.button>
-                             <motion.button onClick={handleGenerateVideoPrompt} className="flex-1 py-3 bg-amber-500 text-black rounded-lg">Generate</motion.button>
+                             <motion.button
+                                onClick={handleCloseVideoPromptModal}
+                                className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                                disabled={isGeneratingVideoPrompt}
+                             >
+                                Cancel
+                             </motion.button>
+                             <motion.button
+                                onClick={handleGenerateVideoPrompt}
+                                className="flex-1 py-3 bg-amber-500 text-black rounded-lg flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                                disabled={isGeneratingVideoPrompt}
+                             >
+                                {isGeneratingVideoPrompt ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                <span>{isGeneratingVideoPrompt ? 'Generating...' : 'Generate'}</span>
+                             </motion.button>
                         </div>
                         {generatedContent[showVideoPromptModal.id]?.videoPrompt && (
                             <div className="relative mt-4 bg-gray-800 p-3 rounded text-sm text-gray-200">
