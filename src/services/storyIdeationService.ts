@@ -29,6 +29,18 @@ export interface StoryContext {
   turningPoint?: string;
 }
 
+export interface SmartSuggestionResult {
+  targetQuestionId: string;
+  targetQuestionTitle: string;
+  contextSummary: string;
+  bestSuggestion: {
+    text: string;
+    reason: string;
+    rank: number;
+  } | null;
+  additionalSuggestions: string[];
+}
+
 export const storyIdeationQuestions: StoryIdeationQuestion[] = [
   {
     id: 'protagonist',
@@ -216,31 +228,149 @@ export class StoryIdeationService {
     }
   }
 
-  static async generateSmartSuggestions(questionId: string, context: Partial<StoryContext>, allAnswers: Record<string, string>): Promise<string[]> {
-    try {
-      // Build context from all answered questions
-      const contextText = Object.entries(allAnswers)
-        .filter(([key, value]) => value.trim().length > 0)
+  static async generateSmartSuggestions(
+    questionId: string,
+    context: Partial<StoryContext>,
+    allAnswers: Record<string, string>
+  ): Promise<SmartSuggestionResult> {
+    const targetQuestion = storyIdeationQuestions.find(q => q.id === questionId);
+
+    const baseResult: SmartSuggestionResult = {
+      targetQuestionId: questionId,
+      targetQuestionTitle: targetQuestion?.title ?? questionId,
+      contextSummary: Object.entries(allAnswers)
+        .filter(([_, value]) => value.trim().length > 0)
         .map(([key, value]) => `${key}: ${value}`)
-        .join('\n');
+        .join('\n'),
+      bestSuggestion: null,
+      additionalSuggestions: []
+    };
 
-      const knowledgeContext = this.getRelevantKnowledge(questionId)
-        .join('\n');
+    const knowledgeSnippets = this.getRelevantKnowledge(questionId);
 
-      const fullContext = `${knowledgeContext}\n\nStory Context:\n${contextText}`;
+    try {
+      const knowledgeContext = knowledgeSnippets.join('\n');
+      const fullContext = `${knowledgeContext}\n\nStory Context:\n${baseResult.contextSummary}`.trim();
 
-      // Use HuggingFace for local analysis if available
-      const suggestions = await huggingFaceService.generateSuggestions(fullContext, questionId);
-      
-      if (suggestions && suggestions.length > 0) {
-        return suggestions.slice(0, 3); // Return top 3 suggestions
+      const generatedSuggestions = await huggingFaceService.generateSuggestions(fullContext, questionId);
+      const scoredSuggestions = (generatedSuggestions ?? []).map((suggestion, index) => ({
+        text: suggestion,
+        rank: index + 1,
+        score: this.scoreSuggestionForContext(suggestion, questionId, context, baseResult.contextSummary)
+      }));
+
+      if (scoredSuggestions.length === 0) {
+        return this.buildFallbackSuggestion(baseResult, knowledgeSnippets);
       }
 
-      // Fallback to knowledge-based suggestions
-      return this.getRelevantKnowledge(questionId).slice(0, 2);
+      const [best, ...rest] = scoredSuggestions.sort((a, b) => b.score - a.score);
+
+      return {
+        ...baseResult,
+        bestSuggestion: {
+          text: best.text,
+          reason: this.buildSuggestionJustification(best.text, questionId, context, knowledgeSnippets, best.rank),
+          rank: best.rank
+        },
+        additionalSuggestions: rest.map(item => item.text)
+      };
     } catch (error) {
-      return this.getRelevantKnowledge(questionId).slice(0, 2);
+      return this.buildFallbackSuggestion(baseResult, knowledgeSnippets);
     }
+  }
+
+  private static buildFallbackSuggestion(
+    base: SmartSuggestionResult,
+    knowledgeSnippets: string[]
+  ): SmartSuggestionResult {
+    const fallbackText = knowledgeSnippets[0]?.replace(/^📚\s*/, '')
+      || 'Consider deepening the emotional stakes to keep the narrative engaging.';
+
+    const justification = knowledgeSnippets.length > 0
+      ? 'Suggested from curated knowledge relevant to this beat.'
+      : 'Builds directly on the context you have outlined so far.';
+
+    return {
+      ...base,
+      bestSuggestion: {
+        text: fallbackText,
+        reason: justification,
+        rank: 1
+      },
+      additionalSuggestions: knowledgeSnippets.slice(1).map(snippet => snippet.replace(/^📚\s*/, ''))
+    };
+  }
+
+  private static scoreSuggestionForContext(
+    suggestion: string,
+    questionId: string,
+    context: Partial<StoryContext>,
+    contextSummary: string
+  ): number {
+    let score = 1;
+    const normalizedSuggestion = suggestion.toLowerCase();
+
+    const relevantKeys: Array<keyof StoryContext> = [
+      'protagonist',
+      'coreWant',
+      'centralConflict',
+      'emotionalTone',
+      'stakes',
+      'genre'
+    ];
+
+    relevantKeys.forEach(key => {
+      const value = context[key]?.toLowerCase();
+      if (value && normalizedSuggestion.includes(value.split(/[\s,]+/)[0])) {
+        score += 2;
+      }
+    });
+
+    if (contextSummary.toLowerCase().includes(questionId)) {
+      score += 1;
+    }
+
+    if (questionId === 'stakes' && normalizedSuggestion.includes('consequence')) {
+      score += 2;
+    }
+
+    if (questionId === 'coreWant' && normalizedSuggestion.includes('want')) {
+      score += 1;
+    }
+
+    return score;
+  }
+
+  private static buildSuggestionJustification(
+    suggestion: string,
+    questionId: string,
+    context: Partial<StoryContext>,
+    knowledgeSnippets: string[],
+    rank: number
+  ): string {
+    const reasons: string[] = [];
+
+    if (context.genre) {
+      reasons.push(`Aligns with the ${context.genre} tone you established.`);
+    }
+
+    if (context.coreWant && ['stakes', 'centralConflict', 'turningPoint'].includes(questionId)) {
+      reasons.push('Reinforces the protagonist\'s driving desire.');
+    }
+
+    if (context.age && questionId === 'protagonist') {
+      reasons.push('Builds on the character age details you provided.');
+    }
+
+    if (knowledgeSnippets.length > 0 && rank === 1) {
+      reasons.push('Supported by relevant creative references.');
+    }
+
+    if (reasons.length === 0) {
+      reasons.push('Builds naturally from the story context you\'ve outlined.');
+    }
+
+    return reasons.join(' ');
   }
 
   static buildScriptFromContext(context: Partial<StoryContext>): string {

@@ -31,7 +31,8 @@ import {
   Palette,
   Download,
   ChevronDown,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import {
   questions,
@@ -98,7 +99,7 @@ import {
     enhanceShotPrompt,
     generateStoryFromIdea,
     getRandomInspiration,
-    generateStoryboard, 
+    generateStoryboard,
     generateVideoPrompt,
     getTimelineSuggestion,
     analyzeSequenceStyle,
@@ -831,7 +832,7 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
     deleteConfiguration, deleteKnowledgeDoc, handleFileUpload, isProcessingDoc,
     currentQuestionIndex, setCurrentQuestionIndex, onBackToHome
 }) => {
-    const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+    const [bestInsight, setBestInsight] = useState<CinematographyInsight | null>(null);
     const [isLoadingAI, setIsLoadingAI] = useState(false);
     const [huggingFaceReady, setHuggingFaceReady] = useState(false);
     const [knowledgeInsights, setKnowledgeInsights] = useState<string[]>([]);
@@ -926,7 +927,7 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
 
     const fetchAISuggestions = async () => {
         setIsLoadingAI(true);
-        setAiSuggestions([]);
+        setBestInsight(null);
         setKnowledgeInsights([]);
         setNarrativeAnalysis(null);
         setGenreProfile(null);
@@ -943,9 +944,9 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
         
         // Get enhanced knowledge-based suggestions
         try {
-            const { suggestions, relevantKnowledge } = await getKnowledgeBasedSuggestions(
-                fullContext, 
-                currentQuestion.question, 
+            const { bestSuggestion, relevantKnowledge } = await getKnowledgeBasedSuggestions(
+                fullContext,
+                currentQuestion.question,
                 knowledgeDocs
             );
             
@@ -967,9 +968,9 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
                 appLogger.warn('Genre intelligence failed:', genreError);
             }
             
-            setAiSuggestions(suggestions);
+            setBestInsight(bestSuggestion ?? null);
             setKnowledgeInsights(relevantKnowledge);
-            
+
             // Also get local narrative analysis if HuggingFace is ready
             if (huggingFaceReady) {
                 const analysis = await huggingFaceService.analyzeNarrative(fullContext);
@@ -977,16 +978,52 @@ const BuilderPage: React.FC<BuilderPageProps> = ({
             }
         } catch (error) {
             appLogger.error('Enhanced suggestions failed, falling back to basic AI suggestions:', error);
-            const suggestions = await getAISuggestions(fullContext, currentQuestion.question, knowledgeDocs);
-            setAiSuggestions(suggestions);
+            const { bestSuggestion } = await getAISuggestions(fullContext, currentQuestion.question, knowledgeDocs);
+            setBestInsight(bestSuggestion ?? null);
         }
-        
+
         setIsLoadingAI(false);
     };
-    
+
+    const applyBestInsight = useCallback(() => {
+        if (!bestInsight || !currentQuestion) {
+            return;
+        }
+
+        try {
+            handleAnswer(
+                currentQuestion.id as keyof PromptData,
+                bestInsight.text as PromptData[keyof PromptData]
+            );
+            toast.success('Insight applied to the answer.');
+        } catch (error) {
+            appLogger.error('Failed to apply insight:', error);
+            toast.error('Unable to apply the insight.');
+        }
+    }, [bestInsight, currentQuestion, handleAnswer]);
+
+    const copyBestInsight = useCallback(async () => {
+        if (!bestInsight) {
+            return;
+        }
+
+        if (typeof navigator === 'undefined' || !navigator.clipboard) {
+            toast.error('Clipboard access is unavailable.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(bestInsight.text);
+            toast.success('Insight copied to clipboard.');
+        } catch (error) {
+            appLogger.error('Failed to copy insight:', error);
+            toast.error('Failed to copy insight. Please try again.');
+        }
+    }, [bestInsight]);
+
     const onSave = () => { if (!saveName.trim()) { alert('Please enter a name for this configuration'); return; } saveConfiguration(saveName); setSaveName(''); setShowSaveModal(false); }
-    const nextQuestion = () => { if (activeQuestions && currentQuestionIndex < activeQuestions.length - 1) { setCurrentQuestionIndex(prev => prev + 1); setAiSuggestions([]); } };
-    const prevQuestion = () => { if (currentQuestionIndex > 0) { setCurrentQuestionIndex(prev => prev - 1); setAiSuggestions([]); } };
+    const nextQuestion = () => { if (activeQuestions && currentQuestionIndex < activeQuestions.length - 1) { setCurrentQuestionIndex(prev => prev + 1); setBestInsight(null); } };
+    const prevQuestion = () => { if (currentQuestionIndex > 0) { setCurrentQuestionIndex(prev => prev - 1); setBestInsight(null); } };
 
     return (
         <div className="min-h-screen bg-black text-white">
@@ -1206,29 +1243,49 @@ SCENES: ${ideation.scenes.map(s => s.location).join(', ')}
                 </motion.div>
               )}
 
-              {(aiSuggestions || []).length > 0 && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  className="space-y-3"
+              {bestInsight && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-5 bg-gray-900/60 border border-gray-700/50 rounded-xl space-y-4"
                 >
-                  {(aiSuggestions || []).map((suggestion, index) => (
-                    <motion.button 
-                      key={index} 
-                      initial={{ opacity: 0, x: -10 }} 
-                      animate={{ opacity: 1, x: 0 }} 
-                      transition={{ delay: index * 0.1 }} 
-                      whileHover={{ scale: 1.01, x: 4 }} 
-                      whileTap={{ scale: 0.99 }} 
-                      onClick={() => handleAnswer(currentQuestion.id as keyof PromptData, suggestion)} 
-                      className="w-full p-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl text-left transition-all group"
-                    >
-                      <div className="flex items-start space-x-3">
-                        <span className="text-amber-400 text-lg group-hover:scale-110 transition-transform">✨</span>
-                        <span className="text-gray-200 text-base leading-relaxed group-hover:text-white transition-colors">{suggestion}</span>
+                  <div className="flex items-start justify-between space-x-4">
+                    <div className="flex items-start space-x-3">
+                      <span className="text-amber-400 text-2xl">✨</span>
+                      <div className="space-y-2">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-amber-400">Dreamer Insight</div>
+                        <div className="text-gray-100 text-base leading-relaxed">{bestInsight.text}</div>
                       </div>
-                    </motion.button>
-                  ))}
+                    </div>
+                    <div className="flex flex-col items-end space-y-2">
+                      <span className="text-xs font-semibold text-gray-400 bg-gray-800/80 px-2 py-1 rounded-full">Score {bestInsight.score.toFixed(2)}</span>
+                      <div className="flex space-x-2">
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={copyBestInsight}
+                          className="flex items-center space-x-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-200"
+                        >
+                          <ClipboardCopy className="w-4 h-4" />
+                          <span>Copy</span>
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={applyBestInsight}
+                          className="flex items-center space-x-2 px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-lg text-sm text-amber-300"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          <span>Apply</span>
+                        </motion.button>
+                      </div>
+                    </div>
+                  </div>
+                  {bestInsight.rationale && (
+                    <div className="text-sm text-gray-400 leading-relaxed border-t border-gray-800/60 pt-3">
+                      <span className="text-gray-300 font-semibold">Why it helps:</span> {bestInsight.rationale}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </motion.div>
@@ -2192,6 +2249,7 @@ interface SelectedItemPanelProps {
         enhancedPrompt?: string;
         videoPrompt?: string;
         status: 'idle' | 'loading' | 'error';
+        pendingAction?: 'enhancing' | 'image-photoreal' | 'image-stylized' | 'video-prompt';
     };
     // Visual Editor Props
     compositions: Record<string, CompositionData>;
@@ -2260,13 +2318,47 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
 
     if (item.type !== 'shot') {
         return (
-            <div className="flex-grow flex flex-col p-4 bg-gray-950 border border-gray-800 rounded-lg">
-                 <h2 className="text-xl font-semibold text-amber-400 mb-2">
-                    {item.type === 'b-roll' ? 'B-Roll Shot' : item.type === 'transition' ? 'Transition Note' : 'Title Card'}
-                </h2>
-                {item.type === 'b-roll' && <textarea value={item.prompt} onChange={e => updateItem({...item, prompt: e.target.value})} className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"/>}
-                {item.type === 'transition' && <textarea value={item.note} onChange={e => updateItem({...item, note: e.target.value})} className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"/>}
-                {item.type === 'text' && <textarea value={item.title} onChange={e => updateItem({...item, title: e.target.value})} className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"/>}
+            <div className="flex-grow flex flex-col p-4 bg-gray-950 border border-gray-800 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-amber-400">
+                        {item.type === 'b-roll' ? 'B-Roll Shot' : item.type === 'transition' ? 'Transition Note' : 'Title Card'}
+                    </h2>
+                    <button
+                        onClick={handleCopyNonShotPrompt}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-sm rounded-lg transition-colors"
+                    >
+                        {nonShotCopySuccess ? (
+                            <Check className="w-4 h-4 text-emerald-400" />
+                        ) : (
+                            <ClipboardCopy className="w-4 h-4 text-amber-300" />
+                        )}
+                        <span className="hidden sm:inline text-gray-200">Copy</span>
+                    </button>
+                </div>
+                {item.type === 'b-roll' && (
+                    <textarea
+                        value={item.prompt}
+                        onChange={e => updateItem({ ...item, prompt: e.target.value })}
+                        className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"
+                        placeholder="Describe your b-roll prompt..."
+                    />
+                )}
+                {item.type === 'transition' && (
+                    <textarea
+                        value={item.note}
+                        onChange={e => updateItem({ ...item, note: e.target.value })}
+                        className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"
+                        placeholder="Describe the transition cue..."
+                    />
+                )}
+                {item.type === 'text' && (
+                    <textarea
+                        value={item.title}
+                        onChange={e => updateItem({ ...item, title: e.target.value })}
+                        className="w-full flex-grow bg-gray-900 rounded p-2 text-gray-300"
+                        placeholder="Enter the title card text..."
+                    />
+                )}
             </div>
         );
     }
@@ -2303,6 +2395,66 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
         }
     };
 
+    const handleCopyNonShotPrompt = async () => {
+        let text = '';
+        if (item.type === 'b-roll') {
+            text = item.prompt || '';
+        } else if (item.type === 'transition') {
+            text = item.note || '';
+        } else if (item.type === 'text') {
+            text = item.title || '';
+        }
+
+        if (!text.trim()) {
+            toast.error('Nothing to copy yet.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            setNonShotCopySuccess(true);
+            toast.success('Copied to clipboard!');
+            setTimeout(() => setNonShotCopySuccess(false), 2000);
+        } catch (error) {
+            appLogger.error('Failed to copy prompt content:', error);
+            toast.error('Unable to copy. Please try again.');
+        }
+    };
+
+    const handleCopyEnhancedPrompt = async () => {
+        if (!generatedContent.enhancedPrompt) {
+            toast.error('No enhanced prompt available yet.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(generatedContent.enhancedPrompt);
+            setCopiedEnhancedPrompt(true);
+            toast.success('Enhanced prompt copied!');
+            setTimeout(() => setCopiedEnhancedPrompt(false), 2000);
+        } catch (error) {
+            appLogger.error('Failed to copy enhanced prompt:', error);
+            toast.error('Unable to copy enhanced prompt.');
+        }
+    };
+
+    const handleCopyGeneratedVideoPrompt = async () => {
+        if (!generatedContent.videoPrompt) {
+            toast.error('Generate a video prompt first.');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(generatedContent.videoPrompt);
+            setCopiedVideoPrompt(true);
+            toast.success('Video prompt copied!');
+            setTimeout(() => setCopiedVideoPrompt(false), 2000);
+        } catch (error) {
+            appLogger.error('Failed to copy video prompt:', error);
+            toast.error('Unable to copy video prompt right now.');
+        }
+    };
+
     const visualData = {
         composition: compositions[item.id] || defaultComposition,
         lighting: lightingData[item.id] || defaultLighting,
@@ -2323,7 +2475,20 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                    {isModified && (
                         <motion.button title="Revert to Original Prompt" whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => onRevert(shotItem)} className="p-2.5 md:p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"><RefreshCcw className="w-4 h-4 md:w-5 md:h-5 text-amber-400"/></motion.button>
                    )}
-                   <motion.button title="Enhance with AI" whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => onEnhance(shotItem)} className="p-2.5 md:p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"><WandSparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-400"/></motion.button>
+                   <motion.button
+                        title="Enhance with AI"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => onEnhance(shotItem)}
+                        disabled={isEnhancing || isGenerationBusy}
+                        className="p-2.5 md:p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                        {isEnhancing ? (
+                            <Loader2 className="w-4 h-4 md:w-5 md:h-5 text-purple-300 animate-spin" />
+                        ) : (
+                            <WandSparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
+                        )}
+                    </motion.button>
                 </div>
             </div>
 
@@ -2468,6 +2633,21 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                             </div>
                         )}
                     </div>
+                    {generatedContent.enhancedPrompt && (
+                        <div className="bg-gray-900 border border-amber-500/30 rounded-lg p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-semibold text-amber-300 uppercase tracking-wide">Enhanced Prompt</h4>
+                                <button
+                                    onClick={handleCopyEnhancedPrompt}
+                                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-xs text-amber-200"
+                                >
+                                    {copiedEnhancedPrompt ? <Check className="w-4 h-4 text-emerald-400" /> : <ClipboardCopy className="w-4 h-4" />}
+                                    <span className="hidden sm:inline">Copy</span>
+                                </button>
+                            </div>
+                            <p className="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">{generatedContent.enhancedPrompt}</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -2480,7 +2660,7 @@ const SelectedItemPanel: React.FC<SelectedItemPanelProps> = ({
                         disabled={isUpdatingPrompt}
                         className="px-3 py-1 text-sm rounded bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-60 flex items-center space-x-2"
                     >
-                        {isUpdatingPrompt && <div className="w-4 h-4 animate-spin rounded-full border-2 border-amber-300 border-t-amber-500" />}
+                        {isUpdatingPrompt && <Loader2 className="w-4 h-4 animate-spin text-amber-400" />}
                         <span>{isUpdatingPrompt ? 'Updating...' : 'Update Prompt from Visuals'}</span>
                     </button>
                  </div>
@@ -2567,6 +2747,7 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
     const [showVideoPromptModal, setShowVideoPromptModal] = useState<ShotItem | null>(null);
     const [videoPromptInstructions, setVideoPromptInstructions] = useState("");
     const [videoPromptCopied, setVideoPromptCopied] = useState(false);
+    const [isGeneratingVideoPrompt, setIsGeneratingVideoPrompt] = useState(false);
     
     // Auto-scroll functionality for timeline items
     const timelineContainerRef = useRef<HTMLDivElement>(null);
@@ -2657,6 +2838,7 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
         enhancedPrompt?: string;
         videoPrompt?: string;
         status: 'idle' | 'loading' | 'error';
+        pendingAction?: 'enhancing' | 'image-photoreal' | 'image-stylized' | 'video-prompt';
     }>>({});
 
     const activeItem = useMemo(() => timelineItems.find(item => item.id === activeTimelineItemId), [timelineItems, activeTimelineItemId]);
@@ -2833,6 +3015,7 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
         } catch (e) {
             setGeneratedContent(prev => ({...prev, [id]: {...(prev[id] || { status: 'idle' }), status: 'error'}}));
         }
+        setIsGeneratingVideoPrompt(false);
     };
 
     const handleVideoPromptCopy = async () => {
@@ -2846,6 +3029,16 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
         } catch (error) {
             appLogger.error("Failed to copy video prompt:", error);
         }
+    };
+
+    const handleCloseVideoPromptModal = () => {
+        if (isGeneratingVideoPrompt) {
+            toast.warning('Please wait for the video prompt to finish generating.');
+            return;
+        }
+        setShowVideoPromptModal(null);
+        setVideoPromptInstructions("");
+        setVideoPromptCopied(false);
     };
 
     const handleDeleteItem = (id: string) => {
@@ -3108,13 +3301,32 @@ const VisualSequenceEditor: React.FC<VisualSequenceEditorProps> = (props) => {
                 </div>
             </div>
              {showVideoPromptModal && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50" onClick={() => setShowVideoPromptModal(null)}>
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
+                    onClick={handleCloseVideoPromptModal}
+                >
                     <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="bg-gray-900 border border-gray-800 rounded-lg p-6 max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-xl font-semibold mb-4">Generate Video Prompt for Shot {showVideoPromptModal.data.shotNumber}</h3>
                         <textarea value={videoPromptInstructions} onChange={(e) => setVideoPromptInstructions(e.target.value)} placeholder="Optional: describe desired camera movement or action..." className="w-full h-24 p-3 bg-gray-800 border border-gray-700 rounded-lg text-white mb-4" />
                         <div className="flex space-x-2">
-                             <motion.button onClick={() => setShowVideoPromptModal(null)} className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg">Cancel</motion.button>
-                             <motion.button onClick={handleGenerateVideoPrompt} className="flex-1 py-3 bg-amber-500 text-black rounded-lg">Generate</motion.button>
+                             <motion.button
+                                onClick={handleCloseVideoPromptModal}
+                                className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                                disabled={isGeneratingVideoPrompt}
+                             >
+                                Cancel
+                             </motion.button>
+                             <motion.button
+                                onClick={handleGenerateVideoPrompt}
+                                className="flex-1 py-3 bg-amber-500 text-black rounded-lg flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                                disabled={isGeneratingVideoPrompt}
+                             >
+                                {isGeneratingVideoPrompt ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                <span>{isGeneratingVideoPrompt ? 'Generating...' : 'Generate'}</span>
+                             </motion.button>
                         </div>
                         {generatedContent[showVideoPromptModal.id]?.videoPrompt && (
                             <div className="relative mt-4 bg-gray-800 p-3 rounded text-sm text-gray-200">
